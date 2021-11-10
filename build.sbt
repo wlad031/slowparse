@@ -1,6 +1,8 @@
-name := "template-scala-sbt"
-organization := "dev.vgerasimov"
-version := "0.1.0"
-scalaVersion := "2.13.4"
-
-idePackagePrefix := Some("dev.vgerasimov.example")
+val root = project
+  .in(file("."))
+  .settings(
+    scalaVersion := "3.1.0",
+    organization := "dev.vgerasimov",
+    name := "slowparse",
+    version := "0.1.0",
+)
