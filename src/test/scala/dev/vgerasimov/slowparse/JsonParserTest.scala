@@ -1,5 +1,3 @@
 package dev.vgerasimov.slowparse
 
-class JsonParserTest {
-  
-}
+class JsonParserTest {}
