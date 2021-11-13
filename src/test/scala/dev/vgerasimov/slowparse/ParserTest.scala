@@ -2,10 +2,12 @@ package dev.vgerasimov.slowparse
 
 import dev.vgerasimov.slowparse.Parsers.*
 import dev.vgerasimov.slowparse.POut.*
-import org.scalacheck.{ Gen, Prop }
 import org.scalacheck.Prop.*
+import org.scalacheck.Gen
 
-class ParserTest extends munit.ScalaCheckSuite {
+import TestingHelpers.*
+
+class ParserTest extends munit.ScalaCheckSuite:
 
   test("*capture(anyChar)* should parse any single printable ASCII character") {
     forAll { (c: Char, tail: String) =>
@@ -14,6 +16,7 @@ class ParserTest extends munit.ScalaCheckSuite {
         val parser = anyChar.!
         parser(toParse) match
           case Success(value, _, remaining, _) =>
+            assertEquals(value, c.toString)
             assertEquals(value, c.toString)
             assertEquals(remaining, tail)
           case _: Failure => fail(s"not parsed: $toParse")
@@ -114,8 +117,8 @@ class ParserTest extends munit.ScalaCheckSuite {
   test("*andThen(capture(char), capture(char))* should parse two single printable ASCII characters") {
     forAll { (c1: Char, c2: Char, tail: String) =>
       {
-        val toParse = s"$c1$c2$tail"
         val parser = P(c1).! ~ P(c2).!
+        val toParse = s"$c1$c2$tail"
         parser(toParse) match
           case Success(value, _, remaining, _) =>
             assertEquals(value, s"$c1$c2")
@@ -124,4 +127,31 @@ class ParserTest extends munit.ScalaCheckSuite {
       }
     }
   }
-}
+
+  test("*capture(d.rep(1, max, greedy))* should parse any number of digits") {
+    val parser = d.rep().!
+    forAllNoShrink(Gen.numStr) { (s: String) =>
+      {
+        val toParse = s
+        parser(toParse) match
+          case Success(v, _, remaining, _) =>
+            assertEquals(v, s)
+            assertEquals(remaining, "")
+          case _: Failure => fail(s"not parsed: $toParse")
+      }
+    }
+  }
+
+  test("""*"a".*.!* should parse any number character "a" including 0""") {
+    val parser = P("a").*.!
+    testSuccess(parser)("a", "a")
+    testSuccess(parser)("aaa", "aaa")
+    testSuccess(parser)("", "")
+  }
+
+  test("""*"a".+.!* should parse any number character "a" excluding 0""") {
+    val parser = P("a").+.!
+    testSuccess(parser)("a", "a")
+    testSuccess(parser)("aaa", "aaa")
+    testFailure(parser)("")
+  }
