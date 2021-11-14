@@ -7,10 +7,11 @@ val root = project
     organization := "dev.vgerasimov",
     name := "slowparse",
     version := "0.1.0",
+    githubOwner := "wlad031",
+    githubRepository := "slowparse",
     scalacOptions ++= Seq(
       "-rewrite",
-      "-source",
-      "future"
+      "-source", "future"
     ),
     libraryDependencies ++= {
       val munitVersion = "0.7.29"
