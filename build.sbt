@@ -1,3 +1,5 @@
+import Tasks.generateSequencers
+
 val root = project
   .in(file("."))
   .settings(
@@ -6,7 +8,9 @@ val root = project
     name := "slowparse",
     version := "0.1.0",
     scalacOptions ++= Seq(
-      "-rewrite", "-source", "future"
+      "-rewrite",
+      "-source",
+      "future"
     ),
     libraryDependencies ++= {
       val munitVersion = "0.7.29"
@@ -14,5 +18,10 @@ val root = project
         "org.scalameta" %% "munit"            % munitVersion % Test,
         "org.scalameta" %% "munit-scalacheck" % munitVersion % Test
       )
-    }
-)
+    },
+    Compile / sourceGenerators += Def.task {
+      val file = (Compile / sourceManaged).value / "dev" / "vgerasimov" / "slowparse" / "Sequencers.scala"
+      IO.write(file, generateSequencers(22))
+      Seq(file)
+    }.taskValue
+  )

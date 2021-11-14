@@ -7,5 +7,6 @@
 target
 app/
 project/*
+!project/Tasks.scala
 !project/build.properties
 !project/plugins.sbt
