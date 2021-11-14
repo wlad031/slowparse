@@ -2,7 +2,7 @@
 
 [![build](https://img.shields.io/github/workflow/status/wlad031/slowparse/Scala%20CI?label=CI&logo=GitHub&style=flat-square)](https://github.com/wlad031/slowparse/actions)
 
-This is just my experiment with parser combinators and Scala 3. Highly inspired by [fastparse from Li Haoyi](com-lihaoyi.github.io/fastparse) and [talk from Scott Wlaschin](youtube.com/watch?v=RDalzi7mhdY). If you want to use parser combinators in your project, probably better use [fastparse](github.com/com-lihaoyi/fastparse).
+This is just my experiment with parser combinators and Scala 3. Highly inspired by [fastparse from Li Haoyi](https://com-lihaoyi.github.io/fastparse) and [talk from Scott Wlaschin](https://youtube.com/watch?v=RDalzi7mhdY). If you want to use parser combinators in your project, probably better use [fastparse](https://github.com/com-lihaoyi/fastparse).
 
 ## Example
 
