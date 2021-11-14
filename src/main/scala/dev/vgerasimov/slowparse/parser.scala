@@ -42,6 +42,7 @@ extension [A](self: P[A])
 
   def andThen[B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
   def ~ [B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
+  def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.wss ~ next
 
   def orElse[B](other: P[B]) = Parsers.orElse(self, other)
   def | [B](other: P[B]) = Parsers.orElse(self, other)
@@ -56,7 +57,8 @@ extension [A](self: P[A])
   def flatMap[B](f: A => P[B]) = Parsers.flatMap(self)(f)
   def filter(f: A => Boolean) = Parsers.filter(self)(f)
 
-  def rep(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true) = Parsers.rep(self)(min, max, greedy)
+  def rep(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true, sep: P[Unit] = null) =
+    Parsers.rep(self)(min, max, greedy, sep)
   def + = Parsers.rep(self)(min = 1, max = Int.MaxValue, greedy = true)
   def * = Parsers.rep(self)(min = 0, max = Int.MaxValue, greedy = true)
 
@@ -164,23 +166,27 @@ object Parsers:
 
   def choice[A](parsers: P[A]*): P[A] = parsers.reduce(orElse)
 
-  def rep[A](parser: P[A])(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true): P[List[A]] =
-    def iter(i: Int, values: List[A], parsed: String, remaining: String): POut[List[A]] = parser(remaining) match
+  def rep[A](
+    parser: P[A]
+  )(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true, sep: P[Unit] = null): P[List[A]] =
+    val nextParser = if (sep == null) parser else andThen(sep, parser)
+    def iter(i: Int, parser: P[A], values: List[A], parsed: String, remaining: String): POut[List[A]] = parser(
+      remaining
+    ) match
       // TODO: optimize
       case Success(v, p, r, _) if !greedy && i == min => Success(v :: values, parsed + p, r)
       case Success(v, p, r, _) if greedy && i == max  => Success(v :: values, parsed + p, r)
-      case Success(v, p, r, _)                        => iter(i + 1, v :: values, parsed + p, r)
-      case _: Failure if min <= i && i <= max         => Success(values, parsed, remaining)
+      case Success(v, p, r, _) =>
+        iter(i + 1, nextParser, v :: values, parsed + p, r)
+      case _: Failure if min <= i && i <= max => Success(values, parsed, remaining)
       // TODO: make error message more meaningful
       case _: Failure => Failure(s"rep fucked up")
     input => {
       if (min >= 0) Failure(s"got min reps = $min; cannot be negative")
       if (min <= max) Failure(s"got min reps = $min; must be not greater than max reps = $max")
       if (min == 0 && !greedy) Success(Nil, "", input)
-      else iter(0, Nil, "", input).map(_.reverse)
+      else iter(0, parser, Nil, "", input).map(_.reverse)
     }
-
-  def sep[A](parser: P[A])(separator: P[Unit]): P[List[A]] = ???
 
   def capture(parser: P[?]): P[String] = input => {
     parser(input) match

@@ -1,8 +1,8 @@
 package dev.vgerasimov.slowparse
 
 import dev.vgerasimov.slowparse.POut.*
-import dev.vgerasimov.slowparse.Parsers.*
 import dev.vgerasimov.slowparse.Parsers.given
+import dev.vgerasimov.slowparse.Parsers.*
 import org.scalacheck.Gen
 import org.scalacheck.Prop.*
 
@@ -17,26 +17,22 @@ class JsonParserTest extends ParserTestSuite:
   case class JArray(v: List[Json]) extends Json
   case class JObject(v: Map[String, Json]) extends Json
 
-  val pNull: P[JNull.type] = P("null").map(_ => JNull).label("null")
-  val pBool: P[JBoolean] =
-    (P("true").map(_ => true) | P("false").map(_ => false)).map(JBoolean(_)).label("false or true")
+  val pNull: P[JNull.type] = P("null").map(_ => JNull)
+  val pBool: P[JBoolean] = (P("true").! | P("false").!).map(_.toBoolean).map(JBoolean(_))
 
   // TODO: refactor this
   val pNum: P[JNumber] = (P("-").? ~ d.+.! ~ (P(".") ~ d.+.!).?).map {
     case (minus, v, None)     => JNumber(v.toLong * (if (minus.isDefined) -1 else 1))
     case (minus, v, Some(v1)) => JNumber(s"$v.$v1".toFloat * (if (minus.isDefined) -1 else 1))
-  }.label("number")
+  }
 
-  val pStr: P[JString] = (P("\"") ~ (!P("\"") ~ anyChar).rep().! ~ P("\"")).map(JString(_)).label("string")
-
+  val pStr: P[JString] = (P("\"") ~ (!P("\"") ~ anyChar).rep().! ~ P("\"")).map(JString(_))
   val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
-
-  val pArr: P[JArray] = P("[") ~ wss ~ (pChoice ~ P(",") ~ wss).*.map(JArray(_)) ~ P("]")
-
+  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = (wss ~ P(",") ~ wss)).map(JArray(_)) ~~ P("]")
   val pObj: P[JObject] =
-    P("{") ~ wss
-    ~ (pStr.map(_.v) ~ wss ~ P(":") ~ wss ~ pChoice ~ wss ~ P(",") ~ wss).*.map(ls => JObject(ls.toMap))
-    ~ P("}")
+    val pair: P[(String, Json)] = pStr.map(_.v) ~~ P(":") ~~ pChoice
+    val pairs: P[List[(String, Json)]] = pair.rep(sep = (wss ~ P(",") ~ wss))
+    P("{") ~~ pairs.map(_.toMap).map(JObject(_)) ~~ P("}")
 
   val json: P[Json] = P(pObj | pArr)
 
@@ -55,7 +51,7 @@ class JsonParserTest extends ParserTestSuite:
         |  10,
         |  true,
         |  123.456,
-        |  null,
+        |  null
         |]""".stripMargin
     val expected = JArray(
       List(
@@ -76,7 +72,7 @@ class JsonParserTest extends ParserTestSuite:
         |  "int": 10,
         |  "bool": true,
         |  "float": 123.456,
-        |  "nullable": null,
+        |  "nullable": null
         |}""".stripMargin
     val expected = JObject(
       Map(
@@ -94,16 +90,18 @@ class JsonParserTest extends ParserTestSuite:
     val toParse =
       """{
         |  "string": "this is a string",
-        |  "o1":{"innerBool":false,"arr": [1, 2, 3,], },
-        |  "a1":     [{ "a":"a", }, null, {"foo": null,},],
+        |  "emptyList":[],
+        |  "o1":{"innerBool":false,"arr": [1, 2, 3] },
+        |  "a1":     [{}, null, {"foo": null}]
         |}""".stripMargin
     val expected = JObject(
       Map(
         "string" -> JString("this is a string"),
+        "emptyList" -> JArray(Nil),
         "o1" -> JObject(
           Map("innerBool" -> JBoolean(false), "arr" -> JArray(List(JNumber(1L), JNumber(2L), JNumber(3L))))
         ),
-        "a1" -> JArray(List(JObject(Map("a" -> JString("a"))), JNull, JObject(Map("foo" -> JNull))))
+        "a1" -> JArray(List(JObject(Map()), JNull, JObject(Map("foo" -> JNull))))
       )
     )
     testSuccess(json)(toParse, expected)
