@@ -2,15 +2,16 @@ package dev.vgerasimov.slowparse
 
 import dev.vgerasimov.slowparse.POut.*
 import dev.vgerasimov.slowparse.Parsers.*
-import dev.vgerasimov.slowparse.TestingHelpers.*
+import dev.vgerasimov.slowparse.Parsers.given
 import org.scalacheck.Gen
 import org.scalacheck.Prop.*
 
-class JsonParserTest extends munit.ScalaCheckSuite:
+class JsonParserTest extends ParserTestSuite:
 
   sealed trait Json
   case object JNull extends Json
   case class JBoolean(v: Boolean) extends Json
+  // TODO: make it easily accept integers
   case class JNumber(v: Long | Float) extends Json
   case class JString(v: String) extends Json
   case class JArray(v: List[Json]) extends Json
@@ -19,19 +20,25 @@ class JsonParserTest extends munit.ScalaCheckSuite:
   val pNull: P[JNull.type] = P("null").map(_ => JNull).label("null")
   val pBool: P[JBoolean] =
     (P("true").map(_ => true) | P("false").map(_ => false)).map(JBoolean(_)).label("false or true")
+
+  // TODO: refactor this
   val pNum: P[JNumber] = (P("-").? ~ d.+.! ~ (P(".") ~ d.+.!).?).map {
     case (minus, v, None)     => JNumber(v.toLong * (if (minus.isDefined) -1 else 1))
     case (minus, v, Some(v1)) => JNumber(s"$v.$v1".toFloat * (if (minus.isDefined) -1 else 1))
   }.label("number")
+
   val pStr: P[JString] = (P("\"") ~ (!P("\"") ~ anyChar).rep().! ~ P("\"")).map(JString(_)).label("string")
 
-  def pChoice: P[Json] = choice(pNull, pBool, pNum, pStr)
+  val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
 
-  def pArr: P[JArray] = P("[") ~ wss ~ (pChoice ~ P(",") ~ wss).*.map(JArray(_)) ~ P("]")
-  def pObj: P[JObject] =
-    P("{") ~ wss ~ (pStr.map(_.v) ~ wss ~ P(":") ~ wss ~ pChoice ~ wss ~ P(
-      ","
-    ) ~ wss).*.map(ls => JObject(ls.toMap)) ~ P("}")
+  val pArr: P[JArray] = P("[") ~ wss ~ (pChoice ~ P(",") ~ wss).*.map(JArray(_)) ~ P("]")
+
+  val pObj: P[JObject] =
+    P("{") ~ wss
+    ~ (pStr.map(_.v) ~ wss ~ P(":") ~ wss ~ pChoice ~ wss ~ P(",") ~ wss).*.map(ls => JObject(ls.toMap))
+    ~ P("}")
+
+  val json: P[Json] = P(pObj | pArr)
 
   test("*pNull* should parse null") { testSuccess(pNull)("null", JNull) }
   test("*pBool* should parse false") { testSuccess(pBool)("false", JBoolean(false)) }
@@ -39,10 +46,6 @@ class JsonParserTest extends munit.ScalaCheckSuite:
 
   test("*pNum* should parse an integer") {
     forAll { (n: Int) => testSuccess(pNum)(n.toString, JNumber(n.toLong)) }
-  }
-
-  test("*pNum* should parse a float") {
-    forAll { (n: Float) => testSuccess(pNum)(n.toString, JNumber(n.toLong)) }
   }
 
   test("*pArr* should parse simple JSON array") {
@@ -85,4 +88,23 @@ class JsonParserTest extends munit.ScalaCheckSuite:
       )
     )
     testSuccess(pObj)(toParse, expected)
+  }
+
+  test("*json* should parse more complex JSON object") {
+    val toParse =
+      """{
+        |  "string": "this is a string",
+        |  "o1":{"innerBool":false,"arr": [1, 2, 3,], },
+        |  "a1":     [{ "a":"a", }, null, {"foo": null,},],
+        |}""".stripMargin
+    val expected = JObject(
+      Map(
+        "string" -> JString("this is a string"),
+        "o1" -> JObject(
+          Map("innerBool" -> JBoolean(false), "arr" -> JArray(List(JNumber(1L), JNumber(2L), JNumber(3L))))
+        ),
+        "a1" -> JArray(List(JObject(Map("a" -> JString("a"))), JNull, JObject(Map("foo" -> JNull))))
+      )
+    )
+    testSuccess(json)(toParse, expected)
   }

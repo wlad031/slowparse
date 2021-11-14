@@ -1,13 +1,12 @@
 package dev.vgerasimov.slowparse
 
 import dev.vgerasimov.slowparse.Parsers.*
+import dev.vgerasimov.slowparse.Parsers.given
 import dev.vgerasimov.slowparse.POut.*
 import org.scalacheck.Prop.*
 import org.scalacheck.Gen
 
-import TestingHelpers.*
-
-class ParserTest extends munit.ScalaCheckSuite:
+class ParserTest extends ParserTestSuite:
 
   test("*capture(anyChar)* should parse any single printable ASCII character") {
     forAll { (c: Char, tail: String) =>
@@ -117,7 +116,7 @@ class ParserTest extends munit.ScalaCheckSuite:
   test("*andThen(capture(char), capture(char))* should parse two single printable ASCII characters") {
     forAll { (c1: Char, c2: Char, tail: String) =>
       {
-        val parser = P(c1).! ~ P(c2).!
+        val parser = (P(c1).! ~ P(c2).!).map({ case (a, b) => s"$a$b" })
         val toParse = s"$c1$c2$tail"
         parser(toParse) match
           case Success(value, _, remaining, _) =>
@@ -154,4 +153,11 @@ class ParserTest extends munit.ScalaCheckSuite:
     testSuccess(parser)("a", "a")
     testSuccess(parser)("aaa", "aaa")
     testFailure(parser)("")
+  }
+
+  test("*fromRange* should parse given ranges") {
+    forAllNoShrink(Gen.alphaLowerChar) { (x: Char) => testSuccess(fromRange("a-z").!)(x.toString, x.toString) }
+    forAllNoShrink(Gen.alphaUpperChar) { (x: Char) => testSuccess(fromRange("A-Z").!)(x.toString, x.toString) }
+    forAllNoShrink(Gen.alphaChar) { (x: Char) => testSuccess(fromRange("a-zA-Z").!)(x.toString, x.toString) }
+    forAllNoShrink(Gen.alphaNumChar) { (x: Char) => testSuccess(fromRange("a-z0-9A-Z").!)(x.toString, x.toString) }
   }

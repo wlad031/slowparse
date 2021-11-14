@@ -1,34 +1,49 @@
 package dev.vgerasimov.slowparse
 
-import scala.annotation.implicitNotFound
-import scala.util.NotGiven
-
-/** Represents a type of input for parsing. */
-type PIn = String
+import scala.language.postfixOps
 
 /** Represents a result of parsing. */
 sealed trait POut[+A]
 
 /** Contains implementations of [[POut]]. */
 object POut:
+
   /** Represents successful parsing result. */
-  case class Success[+A](value: A, parsed: PIn, remaining: PIn, parserLabel: Option[String] = None) extends POut[A]
+  case class Success[+A](
+    value: A,
+    parsed: String,
+    remaining: String,
+    parserLabel: Option[String] = None
+  ) extends POut[A]
 
   /** Represents failed parsing result. */
-  case class Failure(message: String, parserLabel: Option[String] = None) extends POut[Nothing]
+  case class Failure(
+    message: String,
+    parserLabel: Option[String] = None
+  ) extends POut[Nothing]
 
 /** Function acception an input to be parsed and returning [[POut]]. */
-trait P[+A] extends (PIn => POut[A])
+trait P[+A] extends (String => POut[A])
 
-@implicitNotFound("Cannot find combiner for (${A}, ${B}) => ${C}")
-trait Combiner[-A, B, C] extends ((A, B) => C)
+object P:
+  def apply[A](parser: => P[A]): P[A] = input => parser(input)
 
+  /** Alias for [[Parsers.char]]. */
+  def apply(x: Char) = Parsers.char(x)
+
+  /** Alias for [[Parsers.string]]. */
+  def apply(x: String) = Parsers.string(x)
+
+@scala.annotation.implicitNotFound("Cannot find sequencer for (${A}, ${B}) => ${C}")
+trait Sequencer[-A, -B, +C] extends ((A, B) => C)
+
+/** Contains postfix variants of many parser combinators in [[Parsers]]. */
 extension [A](self: P[A])
 
-  def andThen[B, C](next: P[B])(using Combiner[A, B, C]) = Parsers.andThen(self, next)
-  def ~ [B, C](next: P[B])(using Combiner[A, B, C]) = Parsers.andThen(self, next)
+  def andThen[B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
+  def ~ [B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
 
-  def orElse[B, C](other: P[B]) = Parsers.orElse(self, other)
+  def orElse[B](other: P[B]) = Parsers.orElse(self, other)
   def | [B](other: P[B]) = Parsers.orElse(self, other)
 
   def unary_! = Parsers.not(self)
@@ -41,83 +56,88 @@ extension [A](self: P[A])
   def flatMap[B](f: A => P[B]) = Parsers.flatMap(self)(f)
   def filter(f: A => Boolean) = Parsers.filter(self)(f)
 
-  def rep(min: Int = 0, max: Int = Int.MaxValue) = Parsers.rep(self)(min, max)
+  def rep(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true) = Parsers.rep(self)(min, max, greedy)
   def + = Parsers.rep(self)(min = 1, max = Int.MaxValue, greedy = true)
   def * = Parsers.rep(self)(min = 0, max = Int.MaxValue, greedy = true)
 
   def label(label: String) = Parsers.label(self)(label)
 
-/** Contains implementations of [[P]]. */
+/** Contains basic implementations and combinators for [[P]]. */
 object Parsers:
   import POut.*
-
-  /** Alias for [[Parsers.char]]. */
-  def P(x: Char) = char(x)
-
-  /** Alias for [[Parsers.string]]. */
-  def P(x: String) = string(x)
+  export Sequencers.given
 
   /** Parses any character from the given string. */
   def anyCharIn(x: String): P[Unit] = choice(x.map(char(_))*)
 
   /** Parses single whitespace character. */
   def ws: P[Unit] = anyCharIn(" \t\n\r").label("ws")
+
+  /** Parses any number of whitespace characters and drops collected value. */
   def wss: P[Unit] = ws.*.!!
 
   /** Parses single digit. */
-  def d: P[Unit] = choice((0 to 9).map(_.toString).map(string(_))*).label("d")
+  def d: P[Unit] = fromRange('0', '9').label("d")
 
   /** Parser returning success only if input is empty. */
   def end: P[Unit] = input => {
     input match
       case "" => Success((), "", "")
-      case x  => Failure(s"expected: end of input, got: $x")
+      case x  => Failure(s"expected: <end of input>, got: $x")
   }
 
   /** Parses returning failure only if input is empty. */
   def anyChar: P[Unit] = input => {
-    input.slice(from = 0, until = 1) match
+    input.safeSlice(from = 0, until = 1) match
       case "" => Failure(s"expetected: any char, got: end of line")
-      case x  => Success((), x, input.slice(from = 1))
+      case x  => Success((), x, input.safeSlice(from = 1))
   }
 
   /** Parses given character. */
   def char(char: Char): P[Unit] = input => {
-    input.head match
+    input.safeHead match
       case x if x == char.toString => Success((), char.toString, input.tail)
       case x                       => Failure(s"expected: $char, got: $x")
   }
 
   /** Parses given string */
   def string(str: String): P[Unit] = input => {
-    input.slice(until = str.length) match
-      case x if x == str => Success((), str, input.slice(str.length))
+    input.safeSlice(until = str.length) match
+      case x if x == str => Success((), str, input.safeSlice(str.length))
       case x             => Failure(s"expected: $str, got: $x")
   }
 
-  def label[A](parser: P[A])(label: String): P[A] = new P[A] {
-    val label_ = label
-    override def apply(input: PIn): POut[A] = {
+  /** Attaches given label to the parser. */
+  def label[A](parser: P[A])(string: String): P[A] = new P[A] {
+    val label = string
+    override def apply(input: String): POut[A] = {
       parser(input) match
         case Success(v, parsed, remaining, _) => Success(v, parsed, remaining, Some(label))
-        case Failure(message, _) => Failure(message, Some(label))
+        case Failure(message, _)              => Failure(message, Some(label))
     }
   }
 
+  /** Applies given function to successful result of calling given parser. */
   def map[A, B](parser: P[A])(f: A => B): P[B] = input => parser(input).map(f)
 
+  /** Applies given function returning another parser to successful result of calling given parser. */
   def flatMap[A, B](parser: P[A])(f: A => P[B]): P[B] = input => {
     parser(input) match
       case x: Failure                       => x
       case Success(v, parsed, remaining, _) => f(v)(remaining)
   }
 
+  /** Wraps result of calling given parser into [[Option]], thus, never fails. */
   def optional[A](parser: P[A]): P[Option[A]] = input => {
     parser(input) match
       case x: Success[A]       => x.map(Some(_))
       case Failure(message, _) => Success(None, "", input)
   }
 
+  /** Unwraps parser returning [[Option]] by failing if result is `None`. */
+  def unOption[A](parser: P[Option[A]]): P[A] = map(filter(parser)(opt => opt != None))(_.get)
+
+  /** Checks that parsed value satisfies given condition, if not - fails. */
   def filter[A](parser: P[A])(cond: A => Boolean): P[A] = input => {
     parser(input) match
       case x: Failure                      => x
@@ -125,9 +145,19 @@ object Parsers:
       case x: Success[A]                   => x
   }
 
-  def unOption[A](parser: P[Option[A]]): P[A] = map(filter(parser)(opt => opt != None))(_.get)
+  /** Concatenates two given parsers. */
+  def andThen[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] = input => {
+    parser1(input) match
+      case Success(value1, parsed1, remaining, _) =>
+        parser2(remaining) match
+          case Success(value2, parsed2, remaining, _) =>
+            Success(sequencer(value1, value2), parsed1 + parsed2, remaining)
+          case Failure(message, _) => Failure(message)
+      case Failure(message, _) => Failure(message)
+  }
 
-  def seq[A](parsers: P[A]*): P[List[A]] =
+  /** Concatenates given sequence of parsers. */
+  def concat[A](parsers: P[A]*): P[List[A]] =
     parsers
       .map(parser => map(parser)(List(_)))
       .reduce((parser1, parser2) => andThen(parser1, parser2)(using _ ++ _))
@@ -150,7 +180,9 @@ object Parsers:
       else iter(0, Nil, "", input).map(_.reverse)
     }
 
-  def capture(parser: P[?]): P[PIn] = input => {
+  def sep[A](parser: P[A])(separator: P[Unit]): P[List[A]] = ???
+
+  def capture(parser: P[?]): P[String] = input => {
     parser(input) match
       case Success(_, parsed, remaining, label) => Success(parsed, parsed, remaining, label)
       case x: Failure                           => x
@@ -164,16 +196,6 @@ object Parsers:
       case _: Failure          => Success((), "", input)
   }
 
-  def andThen[A, B, C](parser1: P[A], parser2: P[B])(using combiner: Combiner[A, B, C]): P[C] = input => {
-    parser1(input) match
-      case Success(value1, parsed1, remaining, _) =>
-        parser2(remaining) match
-          case Success(value2, parsed2, remaining, _) =>
-            Success(combiner(value1, value2), parsed1 + parsed2, remaining)
-          case Failure(message, _) => Failure(message)
-      case Failure(message, _) => Failure(message)
-  }
-
   def orElse[A, B](parser1: P[A], parser2: P[B]): P[A | B] = input => {
     parser1(input) match
       case Success(v, parsed, remaining, _) => Success(v, parsed, remaining)
@@ -183,10 +205,19 @@ object Parsers:
           case x: Failure                       => x.dropLabel
   }
 
-extension (self: PIn)
-  private[slowparse] def head: PIn = slice(0, 1)
-  private[slowparse] def tail: PIn = slice(1)
-  private[slowparse] def slice(from: Int = 0, until: Int = Int.MaxValue): PIn = self match
+  def fromRange(from: Char, to: Char): P[Unit] = choice((from to to).map(char)*)
+
+  def fromRange(s: String): P[Unit] = charRange.+(s) match
+    case Success(ranges, _, _, _) =>
+      choice(ranges.map { case (from, to) => fromRange(from, to) }*)
+    case _: Failure => ignoredInput => Failure(s"cannot parse given range: $s")
+  private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
+
+end Parsers
+
+extension (self: String)
+  private[slowparse] def safeHead: String = safeSlice(0, 1)
+  private[slowparse] def safeSlice(from: Int = 0, until: Int = Int.MaxValue): String = self match
     case x: String if from > until => ""
     case x: String                 => x.substring(Math.max(0, from), Math.min(x.length, until))
 
@@ -201,48 +232,3 @@ extension [A](self: POut[A])
   private[slowparse] def dropLabel: POut[A] = self match
     case POut.Success(v, parsed, remaining, _) => POut.Success(v, parsed, remaining, None)
     case POut.Failure(message, _)              => POut.Failure(message, None)
-
-given dropUnits: Combiner[Unit, Unit, Unit] with
-  override def apply(ignored1: Unit, ignored2: Unit) = ()
-
-given dropFirstUnit[B : nu]: Combiner[Unit, B, B] with
-  override def apply(ignored: Unit, b: B) = b
-
-given dropSecondUnit[A : nu]: Combiner[A, Unit, A] with
-  override def apply(a: A, ignored: Unit) = a
-
-given toTuple2[A : nu : nt2 : nt3 : nt4 : nt5, B : nu]: Combiner[A, B, (A, B)] with
-  override def apply(a: A, b: B) = (a, b)
-
-given toTuple3[A, B, C : nu]: Combiner[(A, B), C, (A, B, C)] with
-  override def apply(a: (A, B), b: C) = (a._1, a._2, b)
-
-given toTuple4[A, B, C, D : nu]: Combiner[(A, B, C), D, (A, B, C, D)] with
-  override def apply(a: (A, B, C), b: D) = (a._1, a._2, a._3, b)
-
-given toTuple5[A, B, C, D, E : nu]: Combiner[(A, B, C, D), E, (A, B, C, D, E)] with
-  override def apply(a: (A, B, C, D), b: E) = (a._1, a._2, a._3, a._4, b)
-
-given toTuple6[A, B, C, D, E, F : nu]: Combiner[(A, B, C, D, E), F, (A, B, C, D, E, F)] with
-  override def apply(a: (A, B, C, D, E), b: F) = (a._1, a._2, a._3, a._4, a._5, b)
-
-/** [[Combiner]] concatenating inputs. */
-given concat: Combiner[PIn, PIn, PIn] with
-  override def apply(in1: PIn, in2: PIn) = in1 + in2
-
-private type nut0[x] = nu[x]
-private type nut1[x] = nut0[x]
-private type nut2[x] = nut1[x] & nt2[x]
-private type nut3[x] = nut2[x] & nt3[x]
-private type nut4[x] = nut3[x] & nt4[x]
-private type nut5[x] = nut4[x] & nt5[x]
-
-private type nu[x] = NotGiven[x =:= Unit]
-private type nt2[x] = NotGiven[x <:< (?, ?)]
-private type nt3[x] = NotGiven[x <:< (?, ?, ?)]
-private type nt4[x] = NotGiven[x <:< (?, ?, ?, ?)]
-private type nt5[x] = NotGiven[x <:< (?, ?, ?, ?, ?)]
-
-@main def foo =
-  import Parsers.P
-  println(((P("a").! ~ P("b").!) ~ (P("c").! ~ P("d") ~ P("e").!) ~ P("f").!)("abcdef"))
