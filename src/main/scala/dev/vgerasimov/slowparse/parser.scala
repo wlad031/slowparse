@@ -79,7 +79,12 @@ object Parsers:
   def wss: P[Unit] = ws.*.!!
 
   /** Parses single digit. */
-  def d: P[Unit] = fromRange('0', '9').label("d")
+  def d: P[Unit] = fromRange('0' to '9').label("d")
+
+  def alphaLower: P[Unit] = fromRange('a' to 'z')
+  def alphaUpper: P[Unit] = fromRange('A' to 'Z')
+  def alpha: P[Unit] = alphaLower | alphaUpper
+  def alphaNum: P[Unit] = d | alpha
 
   /** Parser returning success only if input is empty. */
   def end: P[Unit] = input => {
@@ -91,9 +96,11 @@ object Parsers:
   /** Parses returning failure only if input is empty. */
   def anyChar: P[Unit] = input => {
     input.safeSlice(from = 0, until = 1) match
-      case "" => Failure(s"expetected: any char, got: end of line")
+      case "" => Failure(s"expected: <any char>, got: <end of input>")
       case x  => Success((), x, input.safeSlice(from = 1))
   }
+
+  def until(parser: P[?]): P[Unit] = unCapture(rep(!parser ~ anyChar)(greedy = true))
 
   /** Parses given character. */
   def char(char: Char): P[Unit] = input => {
@@ -168,11 +175,14 @@ object Parsers:
 
   def rep[A](
     parser: P[A]
-  )(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true, sep: P[Unit] = null): P[List[A]] =
+  )(
+    min: Int = 0, 
+    max: Int = Int.MaxValue, 
+    greedy: Boolean = true, 
+    sep: P[Unit] = null
+  ): P[List[A]] =
     val nextParser = if (sep == null) parser else andThen(sep, parser)
-    def iter(i: Int, parser: P[A], values: List[A], parsed: String, remaining: String): POut[List[A]] = parser(
-      remaining
-    ) match
+    def iter(i: Int, parser: P[A], values: List[A], parsed: String, remaining: String): POut[List[A]] = parser(remaining) match
       // TODO: optimize
       case Success(v, p, r, _) if !greedy && i == min => Success(v :: values, parsed + p, r)
       case Success(v, p, r, _) if greedy && i == max  => Success(v :: values, parsed + p, r)
@@ -211,11 +221,11 @@ object Parsers:
           case x: Failure                       => x.dropLabel
   }
 
-  def fromRange(from: Char, to: Char): P[Unit] = choice((from to to).map(char)*)
+  def fromRange(range: scala.collection.immutable.NumericRange.Inclusive[Char]): P[Unit] = choice(range.map(char)*)
 
   def fromRange(s: String): P[Unit] = charRange.+(s) match
     case Success(ranges, _, _, _) =>
-      choice(ranges.map { case (from, to) => fromRange(from, to) }*)
+      choice(ranges.map { case (fromChar, toChar) => fromRange(fromChar to toChar) }*)
     case _: Failure => ignoredInput => Failure(s"cannot parse given range: $s")
   private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
 
