@@ -6,7 +6,7 @@ trait ParserTestSuite extends munit.ScalaCheckSuite:
   /** Checks that parser successfully parsed given string with expected result. */
   def testSuccess[A](parser: P[A])(toParse: String, expected: A) = parser(toParse) match
     case POut.Success(v, _, _, _) => assertEquals(v, expected)
-    case x: POut.Failure          => fail(s"not parsed: $toParse, failure: $x")
+    case POut.Failure(msg, _)     => fail(s"not parsed: $toParse, failure: \n$msg")
 
   /** Checks that parser couldn't parse given string. */
   def testFailure[A](parser: P[A])(toParse: String) = parser(toParse) match

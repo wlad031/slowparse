@@ -8,6 +8,8 @@ import org.scalacheck.Gen
 
 class ParserTest extends ParserTestSuite:
 
+  test("*end* should parse empty line") { testSuccess(end)("", ()) }
+
   test("*capture(anyChar)* should parse any single printable ASCII character") {
     forAll { (c: Char, tail: String) =>
       {
@@ -63,11 +65,10 @@ class ParserTest extends ParserTestSuite:
   }
 
   test("*ws* should parse any whitespace character") {
-    val parser = ws
-    assertEquals(parser(" "), Success((), " ", "", Some("ws")))
-    assertEquals(parser("\n"), Success((), "\n", "", Some("ws")))
-    assertEquals(parser("\t"), Success((), "\t", "", Some("ws")))
-    assertEquals(parser("\r"), Success((), "\r", "", Some("ws")))
+    testSuccess(ws)(" ", ())
+    testSuccess(ws)("\n", ())
+    testSuccess(ws)("\t", ())
+    testSuccess(ws)("\r", ())
   }
 
   test("*capture(string)* should parse a string") {
@@ -116,7 +117,7 @@ class ParserTest extends ParserTestSuite:
   test("*andThen(capture(char), capture(char))* should parse two single printable ASCII characters") {
     forAll { (c1: Char, c2: Char, tail: String) =>
       {
-        val parser = (P(c1).! ~ P(c2).!).map({ case (a, b) => s"$a$b" })
+        val parser = (P(c1).! ~ P(c2).!).map { case (a, b) => s"$a$b" }
         val toParse = s"$c1$c2$tail"
         parser(toParse) match
           case Success(value, _, remaining, _) =>

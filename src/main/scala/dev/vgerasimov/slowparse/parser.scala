@@ -22,17 +22,42 @@ object POut:
     parserLabel: Option[String] = None
   ) extends POut[Nothing]
 
+  object Failure:
+    def fromExpected(
+      expected: String,
+      got: String,
+      ctx: (String, String),
+      parserLabel: Option[String] = None
+    ): Failure =
+      Failure(
+        s"""|Expected: $expected
+          |Got:      $got
+          |   ${if (ctx._1.isEmpty) "   " else "..."}${ctx._1}${ctx._2}${if (ctx._2.isEmpty) "   " else "..."}
+          |      ${" ".repeat(ctx._1.length)}^
+      """.stripMargin,
+        parserLabel
+      )
+
+  def ctx(before: String = "", after: String = ""): (String, String) =
+    (before.safeSlice(from = before.length - 5), after.safeSlice(until = 5))
+
 /** Function acception an input to be parsed and returning [[POut]]. */
 trait P[+A] extends (String => POut[A])
 
+/** Contains simple constructors for [[P]]. */
 object P:
+
+  /** Lazily calls given parser.
+    *
+    * Helpful for creating mutually recursive parsers.
+    */
   def apply[A](parser: => P[A]): P[A] = input => parser(input)
 
   /** Alias for [[Parsers.char]]. */
-  def apply(x: Char) = Parsers.char(x)
+  def apply(char: Char) = Parsers.char(char)
 
   /** Alias for [[Parsers.string]]. */
-  def apply(x: String) = Parsers.string(x)
+  def apply(string: String) = Parsers.string(string)
 
 @scala.annotation.implicitNotFound("Cannot find sequencer for (${A}, ${B}) => ${C}")
 trait Sequencer[-A, -B, +C] extends ((A, B) => C)
@@ -69,8 +94,11 @@ object Parsers:
   import POut.*
   export Sequencers.given
 
+  def success: P[Unit] = input => Success((), "", input)
+  def fail: P[Unit] = input => Failure("this parser always fails")
+
   /** Parses any character from the given string. */
-  def anyCharIn(x: String): P[Unit] = choice(x.map(char(_))*)
+  def anyCharIn(chars: String): P[Unit] = choice(chars.map(char(_))*)
 
   /** Parses single whitespace character. */
   def ws: P[Unit] = anyCharIn(" \t\n\r").label("ws")
@@ -90,7 +118,7 @@ object Parsers:
   def end: P[Unit] = input => {
     input match
       case "" => Success((), "", "")
-      case x  => Failure(s"expected: <end of input>, got: $x")
+      case x  => Failure.fromExpected(expected = "<end of line>", got = input, ctx = ctx(after = input))
   }
 
   /** Parses returning failure only if input is empty. */
@@ -106,7 +134,7 @@ object Parsers:
   def char(char: Char): P[Unit] = input => {
     input.safeHead match
       case x if x == char.toString => Success((), char.toString, input.tail)
-      case x                       => Failure(s"expected: $char, got: $x")
+      case x                       => Failure.fromExpected(expected = char.toString, got = x, ctx = ctx(after = input))
   }
 
   /** Parses given string */
