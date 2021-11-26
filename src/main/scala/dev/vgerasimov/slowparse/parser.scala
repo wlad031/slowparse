@@ -68,6 +68,7 @@ extension [A](self: P[A])
   def andThen[B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
   def ~ [B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
   def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.wss ~ next
+  def ~-~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.ws1 ~ next
 
   def orElse[B](other: P[B]) = Parsers.orElse(self, other)
   def | [B](other: P[B]) = Parsers.orElse(self, other)
@@ -105,6 +106,8 @@ object Parsers:
 
   /** Parses any number of whitespace characters and drops collected value. */
   def wss: P[Unit] = ws.*.!!
+
+  def ws1: P[Unit] = ws.+.!!
 
   /** Parses single digit. */
   def d: P[Unit] = fromRange('0' to '9').label("d")
