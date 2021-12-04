@@ -67,7 +67,7 @@ extension [A](self: P[A])
 
   def andThen[B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
   def ~ [B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
-  def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.wss ~ next
+  def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.ws0 ~ next
   def ~-~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.ws1 ~ next
 
   def orElse[B](other: P[B]) = Parsers.orElse(self, other)
@@ -95,42 +95,57 @@ object Parsers:
   import POut.*
   export Sequencers.given
 
-  def success: P[Unit] = input => Success((), "", input)
-  def fail: P[Unit] = input => Failure("this parser always fails")
+  /** Always succeeding parser consuming no characters. */
+  val success: P[Unit] = input => Success((), "", input)
+
+  /** Always failing parser. */
+  val fail: P[Unit] = input => Failure("this parser always fails")
 
   /** Parses any character from the given string. */
-  def anyCharIn(chars: String): P[Unit] = choice(chars.map(char(_))*)
+  def anyFrom(chars: String): P[Unit] = choice(chars.map(char(_))*)
 
-  /** Parses single whitespace character. */
-  def ws: P[Unit] = anyCharIn(" \t\n\r").label("ws")
+  /** Parses any single end-of-line character. */
+  val eol: P[Unit] = anyFrom("\n\r").label("eol")
 
-  /** Parses any number of whitespace characters and drops collected value. */
-  def wss: P[Unit] = ws.*.!!
+  /** Parses any single whitespace character. */
+  val ws: P[Unit] = anyFrom(" \t\n\r").label("ws")
 
-  def ws1: P[Unit] = ws.+.!!
+  /** Parses zero or more whitespace characters and drops collected value. */
+  val ws0: P[Unit] = ws.*.!!
 
-  /** Parses single digit. */
-  def d: P[Unit] = fromRange('0' to '9').label("d")
+  /** Parses one or more whitespace characters and drops collected value. */
+  val ws1: P[Unit] = ws.+.!!
 
-  def alphaLower: P[Unit] = fromRange('a' to 'z')
-  def alphaUpper: P[Unit] = fromRange('A' to 'Z')
-  def alpha: P[Unit] = alphaLower | alphaUpper
-  def alphaNum: P[Unit] = d | alpha
+  /** Parses single digit character. */
+  val d: P[Unit] = fromRange('0' to '9').label("digit")
+
+  /** Parses single lower alpha (a-z) character. */
+  val alphaLower: P[Unit] = fromRange('a' to 'z')
+
+  /** Parses single upper alpha (A-Z) character. */
+  val alphaUpper: P[Unit] = fromRange('A' to 'Z')
+
+  /** Parses single lower or upper alpha character. */
+  val alpha: P[Unit] = alphaLower | alphaUpper
+
+  /** Parses single alpha-numeric character. */
+  val alphaNum: P[Unit] = d | alpha
 
   /** Parser returning success only if input is empty. */
-  def end: P[Unit] = input => {
+  val end: P[Unit] = input => {
     input match
       case "" => Success((), "", "")
       case x  => Failure.fromExpected(expected = "<end of line>", got = input, ctx = ctx(after = input))
   }
 
   /** Parses returning failure only if input is empty. */
-  def anyChar: P[Unit] = input => {
+  val anyChar: P[Unit] = input => {
     input.safeSlice(from = 0, until = 1) match
       case "" => Failure(s"expected: <any char>, got: <end of input>")
       case x  => Success((), x, input.safeSlice(from = 1))
   }
 
+  /** Parses everyting until given parser succeed. */
   def until(parser: P[?]): P[Unit] = unCapture(rep(!parser ~ anyChar)(greedy = true))
 
   /** Parses given character. */
@@ -255,10 +270,10 @@ object Parsers:
 
   def fromRange(range: scala.collection.immutable.NumericRange.Inclusive[Char]): P[Unit] = choice(range.map(char)*)
 
-  def fromRange(s: String): P[Unit] = charRange.+(s) match
+  def fromRange(range: String): P[Unit] = charRange.+(range) match
     case Success(ranges, _, _, _) =>
       choice(ranges.map { case (fromChar, toChar) => fromRange(fromChar to toChar) }*)
-    case _: Failure => ignoredInput => Failure(s"cannot parse given range: $s")
+    case _: Failure => ignoredInput => Failure(s"cannot parse given range: $range")
   private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
 
 end Parsers

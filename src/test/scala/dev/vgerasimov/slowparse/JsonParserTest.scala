@@ -19,14 +19,14 @@ class JsonParserTest extends ParserTestSuite:
   val pNull: P[JNull.type] = P("null").map(_ => JNull)
   val pBool: P[JBoolean] = (P("true").! | P("false").!).map(_.toBoolean).map(JBoolean(_))
   val pNum: P[JNumber] =
-    (anyCharIn("+-").? ~ d.+ ~ (P(".") ~ d.*).? ~ (anyCharIn("Ee") ~ anyCharIn("+-").? ~ d.*).?).!.map(_.toDouble)
+    (anyFrom("+-").? ~ d.+ ~ (P(".") ~ d.*).? ~ (anyFrom("Ee") ~ anyFrom("+-").? ~ d.*).?).!.map(_.toDouble)
       .map(JNumber(_))
   val pStr: P[JString] = (P("\"") ~ until(P("\"")).! ~ P("\"")).map(JString(_))
   val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
-  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = wss ~ P(",") ~ wss).map(JArray(_)) ~~ P("]")
+  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = ws0 ~ P(",") ~ ws0).map(JArray(_)) ~~ P("]")
   val pObj: P[JObject] =
     val pair: P[(String, Json)] = pStr.map(_.v) ~~ P(":") ~~ pChoice
-    val pairs: P[List[(String, Json)]] = pair.rep(sep = wss ~ P(",") ~ wss)
+    val pairs: P[List[(String, Json)]] = pair.rep(sep = ws0 ~ P(",") ~ ws0)
     P("{") ~~ pairs.map(_.toMap).map(JObject(_)) ~~ P("}")
 
   val json: P[Json] = P(pObj | pArr)
