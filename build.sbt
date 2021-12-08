@@ -9,6 +9,8 @@ val root = project
     version := "0.1.0",
     githubOwner := "wlad031",
     githubRepository := "slowparse",
+    publishConfiguration := publishConfiguration.value.withOverwrite(true),
+    publishLocalConfiguration := publishLocalConfiguration.value.withOverwrite(true),
     scalacOptions ++= Seq(
       "-rewrite",
       "-source", "future"
