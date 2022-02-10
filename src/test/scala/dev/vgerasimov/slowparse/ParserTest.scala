@@ -162,3 +162,47 @@ class ParserTest extends ParserTestSuite:
     forAllNoShrink(Gen.alphaChar) { (x: Char) => testSuccess(fromRange("a-zA-Z").!)(x.toString, x.toString) }
     forAllNoShrink(Gen.alphaNumChar) { (x: Char) => testSuccess(fromRange("a-z0-9A-Z").!)(x.toString, x.toString) }
   }
+
+  test("non-greedy *rep(min, max)* should work properly") {
+    val parser = P("a").rep(min = 3, max = 5, greedy = false).!
+    testSuccess(parser)("aaa", "aaa")
+    testSuccess(parser)("aaaa", "aaa")
+    testSuccess(parser)("aaaaaa", "aaa")
+    testSuccess(parser)("aaaaaaa", "aaa")
+    testFailure(parser)("a")
+    testFailure(parser)("aa")
+  }
+
+  test("greedy *rep(min, max)* should work properly") {
+    val parser = P("a").rep(min = 3, max = 5, greedy = true).!
+    testSuccess(parser)("aaa", "aaa")
+    testSuccess(parser)("aaaa", "aaaa")
+    testSuccess(parser)("aaaaaa", "aaaaa")
+    testSuccess(parser)("aaaaaaa", "aaaaa")
+    testFailure(parser)("a")
+    testFailure(parser)("aa")
+  }
+
+  test("*until* should parse all characters before given one") {
+    val parser = until(P("{")).!
+    testSuccess(parser)("", "")
+    testSuccess(parser)("hello world", "hello world")
+    testSuccess(parser)("hello world{", "hello world")
+    testSuccess(parser)("hello{} world", "hello")
+    testSuccess(parser)("{hello world", "")
+  }
+
+  test("*code blocks* should parse divide given string into code blocks") {
+    val parser = P(P("{") ~ until(P("}")).! ~ P("}")).*
+    testSuccess(parser)("", Nil)
+    testSuccess(parser)("{hello world}", List("hello world"))
+    testSuccess(parser)("{hello world 1}{hello world 2}", List("hello world 1", "hello world 2"))
+  }
+
+  test("*blocks* should parse divide given string into blocks") {
+    val parser = P((P("{") ~ until(P("}")).! ~ P("}")) | until(P("{")).!).*
+    testSuccess(parser)("", Nil)
+    testSuccess(parser)("hello world", List("hello world"))
+    testSuccess(parser)("hello{} world", List("hello", "", " world"))
+    testSuccess(parser)("{hello world}", List("hello world"))
+  }

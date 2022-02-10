@@ -23,10 +23,10 @@ class JsonParserTest extends ParserTestSuite:
       .map(JNumber(_))
   val pStr: P[JString] = (P("\"") ~ until(P("\"")).! ~ P("\"")).map(JString(_))
   val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
-  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = ws0 ~ P(",") ~ ws0).map(JArray(_)) ~~ P("]")
+  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = Some(ws0 ~ P(",") ~ ws0)).map(JArray(_)) ~~ P("]")
   val pObj: P[JObject] =
     val pair: P[(String, Json)] = pStr.map(_.v) ~~ P(":") ~~ pChoice
-    val pairs: P[List[(String, Json)]] = pair.rep(sep = ws0 ~ P(",") ~ ws0)
+    val pairs: P[List[(String, Json)]] = pair.rep(sep = Some(ws0 ~ P(",") ~ ws0))
     P("{") ~~ pairs.map(_.toMap).map(JObject(_)) ~~ P("}")
 
   val json: P[Json] = P(pObj | pArr)
@@ -34,6 +34,8 @@ class JsonParserTest extends ParserTestSuite:
   test("*pNull* should parse null") { testSuccess(pNull)("null", JNull) }
   test("*pBool* should parse false") { testSuccess(pBool)("false", JBoolean(false)) }
   test("*pBool* should parse true") { testSuccess(pBool)("true", JBoolean(true)) }
+
+  test("*pStr* should parse quoted string") { testSuccess(pStr)(""""hello"""", JString("hello")) }
 
   test("*pNum* should parse an integer") {
     forAll { (n: Int) => testSuccess(pNum)(n.toString, JNumber(n.toDouble)) }
