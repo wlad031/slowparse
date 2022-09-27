@@ -83,8 +83,13 @@ extension [A](self: P[A])
   def flatMap[B](f: A => P[B]) = Parsers.flatMap(self)(f)
   def filter(f: A => Boolean) = Parsers.filter(self)(f)
 
-  def rep(min: Int = 0, max: Int = Int.MaxValue, greedy: Boolean = true, sep: Option[P[Unit]] = None) =
-    Parsers.rep(self)(min, max, greedy, sep)
+  def rep(
+    min: Int = 0,
+    max: Int = Int.MaxValue,
+    greedy: Boolean = true,
+    sep: Option[P[Unit]] = None
+  ) = Parsers.rep(self)(min, max, greedy, sep)
+
   def + = Parsers.rep(self)(min = 1, max = Int.MaxValue, greedy = true)
   def * = Parsers.rep(self)(min = 0, max = Int.MaxValue, greedy = true)
 
@@ -101,14 +106,20 @@ object Parsers:
   /** Always failing parser. */
   val fail: P[Unit] = input => Failure("this parser always fails")
 
-  /** Parses any character from the given string. */
-  def anyFrom(chars: String): P[Unit] = choice(chars.map(char(_))*)
-
   /** Parses any single end-of-line character. */
   val eol: P[Unit] = anyFrom("\n\r").label("eol")
 
+  /** Parses single whitespace or tab character. */
+  val s: P[Unit] = anyFrom(" \t").label("s")
+
+  /** Parses zero or more whitespace or tab characters and drops collected value. */
+  val s0: P[Unit] = s.*.!!
+
+  /** Parses one or more whitespace or tab characters and drops collected value. */
+  val s1: P[Unit] = s.+.!!
+
   /** Parses any single whitespace character. */
-  val ws: P[Unit] = anyFrom(" \t\n\r").label("ws")
+  val ws: P[Unit] = (eol | s).label("ws")
 
   /** Parses zero or more whitespace characters and drops collected value. */
   val ws0: P[Unit] = ws.*.!!
@@ -118,6 +129,12 @@ object Parsers:
 
   /** Parses single digit character. */
   val d: P[Unit] = fromRange('0' to '9').label("digit")
+
+  /** Parses single digit character.
+    *
+    * Alias for [[Parsers.d]].
+    */
+  val digit: P[Unit] = d
 
   /** Parses single lower alpha (a-z) character. */
   val alphaLower: P[Unit] = fromRange('a' to 'z')
@@ -138,12 +155,53 @@ object Parsers:
       case x  => Failure.fromExpected(expected = "<end of line>", got = input, ctx = ctx(after = input))
   }
 
+  /** Parses characters satisfying given condition. */
+  def charsWhile(
+    condition: Char => Boolean
+  ): P[String] = input => {
+    // TODO: Maybe I should rewrite it in a more functional style.
+    var toParse = input
+    var remaining = toParse
+    var parsed = ""
+    while (toParse.nonEmpty) {
+      val char = toParse.head
+      if (condition(char)) {
+        parsed += char
+        toParse = toParse.tail
+        remaining = toParse
+      } else {
+        toParse = ""
+      }
+    }
+    Success(parsed, parsed, remaining)
+  }
+
+  /** Parses all characters until some of them is presented in given string. */
+  def charsUntilIn(string: String): P[String] =
+    val chars = string.toSet
+    charsWhile(c => !chars.contains(c))
+
+  /** Parses all characters until end of line. */
+  val charsUntilEol: P[String] = charsUntilIn("\n\r")
+
+  /** Positive-lookahead parser, consumes no input. */
+  def & [A](parser: P[A]): P[A] = input =>
+    parser(input) match
+      case POut.Success(v, _, _, _) => POut.Success(v, "", input)
+      case f: POut.Failure          => f
+
   /** Parses returning failure only if input is empty. */
   val anyChar: P[Unit] = input => {
     input.safeSlice(from = 0, until = 1) match
       case "" => Failure(s"expected: <any char>, got: <end of input>")
       case x  => Success((), x, input.safeSlice(from = 1))
   }
+
+  /** Parses end of line or end of input. */
+  val eolOrEnd: P[Unit] = eol | end
+
+  /** Parses any character from the given string. */
+  def anyFrom(chars: String): P[Unit] = choice(chars.map(char(_))*)
 
   /** Parses everyting until given parser succeed. */
   def until(parser: P[?]): P[Unit] = unCapture(rep(!parser ~ anyChar)(greedy = true))
@@ -225,7 +283,8 @@ object Parsers:
     min: Int = 0,
     max: Int = Int.MaxValue,
     greedy: Boolean = true,
-    sep: Option[P[Unit]] = None
+    sep: Option[P[Unit]] = None,
+    condition: A => Boolean = (_: A) => true
   ): P[List[A]] =
     require(min >= 0, s"got min reps = $min; cannot be negative")
     require(min <= max, s"got min reps = $min; must be not greater than max reps = $max")
@@ -237,17 +296,19 @@ object Parsers:
         else Success(values, parsed, remaining)
       else
         parser(remaining) match
-          case Success(v, p, r, _)                => iter(i + 1, nextParser, v :: values, parsed + p, r)
-          case _: Failure if min <= i && i <= max => Success(values, parsed, remaining)
+          case Success(v, p, r, _) if condition(v)         => iter(i + 1, nextParser, v :: values, parsed + p, r)
+          case Success(v, p, r, _) if min <= i && i <= max => Success(values, parsed, remaining)
+          case _: Failure if min <= i && i <= max          => Success(values, parsed, remaining)
           // TODO: make error message more meaningful
-          case _: Failure => Failure(s"rep fucked up")
-    input => iter(0, parser, Nil, "", input).map(_.reverse)
+          case _ => Failure(s"rep fucked up")
+    (input => iter(0, parser, Nil, "", input)).map(_.reverse)
 
-  def capture(parser: P[?]): P[String] = input => {
-    parser(input) match
-      case Success(_, parsed, remaining, label) => Success(parsed, parsed, remaining, label)
-      case x: Failure                           => x
-  }
+  def capture(parser: P[?]): P[String] =
+    input => {
+      parser(input) match
+        case Success(_, parsed, remaining, label) => Success(parsed, parsed, remaining, label)
+        case x: Failure                           => x
+    }
 
   def unCapture(parser: P[?]): P[Unit] = map(parser)(_ => ())
 

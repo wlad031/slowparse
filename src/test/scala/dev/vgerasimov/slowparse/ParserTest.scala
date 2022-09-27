@@ -206,3 +206,25 @@ class ParserTest extends ParserTestSuite:
     testSuccess(parser)("hello{} world", List("hello", "", " world"))
     testSuccess(parser)("{hello world}", List("hello world"))
   }
+
+  test("*charsWhile* should parse all leading characters satisfying condition") {
+    val parser = charsWhile(_.isLower)
+    testSuccess(parser)("aA", "a")
+    testSuccess(parser)("abcAbc", "abc")
+  }
+
+  test("*charsUntilIn* should parse all characters which are not in the given string") {
+    val parser = charsUntilIn("123")
+    testSuccess(parser)("abc", "abc")
+    testSuccess(parser)("ab1c", "ab")
+    testSuccess(parser)("ab2c", "ab")
+    testSuccess(parser)("ab3c", "ab")
+  }
+
+  test("*charsUntilEol* should parse all characters which are not end of line") {
+    val parser = charsUntilEol
+    testSuccess(parser)("abc", "abc")
+    testSuccess(parser)("abc\n", "abc")
+    testSuccess(parser)("ab\nc", "ab")
+    testSuccess(parser)("\nabc", "")
+  }
