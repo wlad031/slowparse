@@ -21,7 +21,8 @@ class JsonParserTest extends ParserTestSuite:
   val pNum: P[JNumber] =
     (anyFrom("+-").? ~ d.+ ~ (P(".") ~ d.*).? ~ (anyFrom("Ee") ~ anyFrom("+-").? ~ d.*).?).!.map(_.toDouble)
       .map(JNumber(_))
-  val pStr: P[JString] = (P("\"") ~ until(P("\"")).! ~ P("\"")).map(JString(_))
+  val pStr: P[JString] =
+    (P("\"") ~ until((!P("\\") ~ P("\"")), (P("\\\"") | anyChar)).! ~ (!P("\\") ~ P("\""))).map(JString(_))
   val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
   val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = Some(ws0 ~ P(",") ~ ws0)).map(JArray(_)) ~~ P("]")
   val pObj: P[JObject] =
@@ -36,6 +37,10 @@ class JsonParserTest extends ParserTestSuite:
   test("*pBool* should parse true") { testSuccess(pBool)("true", JBoolean(true)) }
 
   test("*pStr* should parse quoted string") { testSuccess(pStr)(""""hello"""", JString("hello")) }
+
+  test("*pStr* should parse a string containing escaped quotes") {
+    testSuccess(pStr)(""""h\"el\"lo"""", JString("""h\"el\"lo"""))
+  }
 
   test("*pNum* should parse an integer") {
     forAll { (n: Int) => testSuccess(pNum)(n.toString, JNumber(n.toDouble)) }

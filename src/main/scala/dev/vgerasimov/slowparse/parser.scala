@@ -204,7 +204,8 @@ object Parsers:
   def anyFrom(chars: String): P[Unit] = choice(chars.map(char(_))*)
 
   /** Parses everyting until given parser succeed. */
-  def until(parser: P[?]): P[Unit] = unCapture(rep(!parser ~ anyChar)(greedy = true))
+  def until(parser: P[?], collector: P[?] = anyChar): P[Unit] =
+    unCapture(rep(!parser ~ collector)(greedy = true))
 
   /** Parses given character. */
   def char(char: Char): P[Unit] = input => {
