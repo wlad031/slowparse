@@ -1,5 +1,6 @@
 package dev.vgerasimov.slowparse
 
+import scala.annotation.{ tailrec, targetName }
 import scala.language.postfixOps
 
 /** Represents a result of parsing. */
@@ -54,10 +55,10 @@ object P:
   def apply[A](parser: => P[A]): P[A] = input => parser(input)
 
   /** Alias for [[Parsers.char]]. */
-  def apply(char: Char) = Parsers.char(char)
+  def apply(char: Char): P[Unit] = Parsers.char(char)
 
   /** Alias for [[Parsers.string]]. */
-  def apply(string: String) = Parsers.string(string)
+  def apply(string: String): P[Unit] = Parsers.string(string)
 
 @scala.annotation.implicitNotFound("Cannot find sequencer for (${A}, ${B}) => ${C}")
 trait Sequencer[-A, -B, +C] extends ((A, B) => C)
@@ -65,35 +66,35 @@ trait Sequencer[-A, -B, +C] extends ((A, B) => C)
 /** Contains postfix variants of many parser combinators in [[Parsers]]. */
 extension [A](self: P[A])
 
-  def andThen[B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
-  def ~ [B, C](next: P[B])(using Sequencer[A, B, C]) = Parsers.andThen(self, next)
-  def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.ws0 ~ next
-  def ~-~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]) = self ~ Parsers.ws1 ~ next
+  def andThen[B, C](next: P[B])(using Sequencer[A, B, C]): P[C] = Parsers.andThen(self, next)
+  def ~ [B, C](next: P[B])(using Sequencer[A, B, C]): P[C] = Parsers.andThen(self, next)
+  def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]): P[C] = self ~ Parsers.ws0 ~ next
+  def ~-~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]): P[C] = self ~ Parsers.ws1 ~ next
 
-  def orElse[B](other: P[B]) = Parsers.orElse(self, other)
-  def | [B](other: P[B]) = Parsers.orElse(self, other)
+  def orElse[B](other: P[B]): P[A | B] = Parsers.orElse(self, other)
+  def | [B](other: P[B]): P[A | B] = Parsers.orElse(self, other)
 
-  def unary_! = Parsers.not(self)
+  @targetName("unaryExclamationMark") def unary_! : P[Unit] = Parsers.not(self)
 
-  def ! = Parsers.capture(self)
-  def !! = Parsers.unCapture(self)
-  def ? = Parsers.optional(self)
+  @targetName("exclamationMark") def ! : P[String] = Parsers.capture(self)
+  @targetName("doubleExclamationMark") def !! : P[Unit] = Parsers.unCapture(self)
+  @targetName("questionMark") def ? : P[Option[A]] = Parsers.optional(self)
 
-  def map[B](f: A => B) = Parsers.map(self)(f)
-  def flatMap[B](f: A => P[B]) = Parsers.flatMap(self)(f)
-  def filter(f: A => Boolean) = Parsers.filter(self)(f)
+  def map[B](f: A => B): P[B] = Parsers.map(self)(f)
+  def flatMap[B](f: A => P[B]): P[B] = Parsers.flatMap(self)(f)
+  def filter(f: A => Boolean): P[A] = Parsers.filter(self)(f)
 
   def rep(
     min: Int = 0,
     max: Int = Int.MaxValue,
     greedy: Boolean = true,
     sep: Option[P[Unit]] = None
-  ) = Parsers.rep(self)(min, max, greedy, sep)
+  ): P[List[A]] = Parsers.rep(self)(min, max, greedy, sep)
 
-  def + = Parsers.rep(self)(min = 1, max = Int.MaxValue, greedy = true)
-  def * = Parsers.rep(self)(min = 0, max = Int.MaxValue, greedy = true)
+  @targetName("plus") def + : P[List[A]] = Parsers.rep(self)(min = 1, max = Int.MaxValue, greedy = true)
+  @targetName("star") def * : P[List[A]] = Parsers.rep(self)(min = 0, max = Int.MaxValue, greedy = true)
 
-  def label(label: String) = Parsers.label(self)(label)
+  def label(label: String): P[A] = Parsers.label(self)(label)
 
 /** Contains basic implementations and combinators for [[P]]. */
 object Parsers:
@@ -201,7 +202,7 @@ object Parsers:
   val eolOrEnd: P[Unit] = eol | end
 
   /** Parses any character from the given string. */
-  def anyFrom(chars: String): P[Unit] = choice(chars.map(char(_))*)
+  def anyFrom(chars: String): P[Unit] = choice(chars.map(char)*)
 
   /** Parses everyting until given parser succeed. */
   def until(parser: P[?], collector: P[?] = anyChar): P[Unit] =
@@ -223,7 +224,7 @@ object Parsers:
 
   /** Attaches given label to the parser. */
   def label[A](parser: P[A])(string: String): P[A] = new P[A] {
-    val label = string
+    private val label = string
     override def apply(input: String): POut[A] = {
       parser(input) match
         case Success(v, parsed, remaining, _) => Success(v, parsed, remaining, Some(label))
@@ -290,7 +291,7 @@ object Parsers:
     require(min >= 0, s"got min reps = $min; cannot be negative")
     require(min <= max, s"got min reps = $min; must be not greater than max reps = $max")
     val nextParser = sep.map(andThen(_, parser)).getOrElse(parser)
-    def iter(i: Int, parser: P[A], values: List[A], parsed: String, remaining: String): POut[List[A]] =
+    @tailrec def iter(i: Int, parser: P[A], values: List[A], parsed: String, remaining: String): POut[List[A]] =
       if (i == max || (i == min && !greedy)) Success(values, parsed, remaining)
       else if (remaining.isEmpty)
         if (i < min) Failure(s"expected minimum $min repetions, but parsed only $i")
@@ -301,7 +302,7 @@ object Parsers:
           case Success(v, p, r, _) if min <= i && i <= max => Success(values, parsed, remaining)
           case _: Failure if min <= i && i <= max          => Success(values, parsed, remaining)
           // TODO: make error message more meaningful
-          case _ => Failure(s"rep fucked up")
+          case _ => Failure(s"rep failed")
     (input => iter(0, parser, Nil, "", input)).map(_.reverse)
 
   def capture(parser: P[?]): P[String] =

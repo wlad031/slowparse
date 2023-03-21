@@ -23,12 +23,13 @@ class JsonParserTest extends ParserTestSuite:
       .map(JNumber(_))
   val pStr: P[JString] =
     (P("\"") ~ until((!P("\\") ~ P("\"")), (P("\\\"") | anyChar)).! ~ (!P("\\") ~ P("\""))).map(JString(_))
+  //noinspection ForwardReference
   val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
-  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = Some(ws0 ~ P(",") ~ ws0)).map(JArray(_)) ~~ P("]")
+  val pArr: P[JArray] = P("[") ~~ pChoice.rep(sep = Some(ws0 ~ P(",") ~ ws0)).map(JArray.apply) ~~ P("]")
   val pObj: P[JObject] =
     val pair: P[(String, Json)] = pStr.map(_.v) ~~ P(":") ~~ pChoice
     val pairs: P[List[(String, Json)]] = pair.rep(sep = Some(ws0 ~ P(",") ~ ws0))
-    P("{") ~~ pairs.map(_.toMap).map(JObject(_)) ~~ P("}")
+    P("{") ~~ pairs.map(_.toMap).map(JObject.apply) ~~ P("}")
 
   val json: P[Json] = P(pObj | pArr)
 
