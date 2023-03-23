@@ -7,6 +7,26 @@
 
 This is just my experiment with parser combinators and Scala 3. Highly inspired by [fastparse from Li Haoyi](https://com-lihaoyi.github.io/fastparse) and [talk from Scott Wlaschin](https://youtube.com/watch?v=RDalzi7mhdY). If you want to use parser combinators in your project, probably better use [fastparse](https://github.com/com-lihaoyi/fastparse).
 
+## Install (sbt)
+
+1. Include GitHub packages plugin:
+```scala
+// plugins.sbt
+addSbtPlugin("com.codecommit" % "sbt-github-packages" % "0.5.3")
+```
+
+2. Add resolver:
+```scala
+// build.sbt
+resolvers += Resolver.githubPackages("wlad031")
+```
+
+3. Include dependency:
+```scala
+// build.sbt
+libraryDependencies += "dev.vgerasimov" %% "slowparse" % "0.1.2",
+```
+
 ## Example
 
 The following parser will be able to parse a valid JSON. Also it can be found in [JsonParserTest.scala](https://github.com/wlad031/slowparse/blob/master/src/test/scala/dev/vgerasimov/slowparse/JsonParserTest.scala).
