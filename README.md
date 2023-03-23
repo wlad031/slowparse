@@ -1,3 +1,6 @@
+[<img src="https://user-images.githubusercontent.com/3338307/227219594-609eb6d3-c982-447a-ba49-5d34ac86230b.png" width="120" align="left" />](icon)
+
+
 # slowparse
 
 [![build](https://img.shields.io/github/actions/workflow/status/wlad031/slowparse/scala.yml?label=CI&logo=GitHub&style=flat-square)](https://github.com/wlad031/slowparse/actions)
