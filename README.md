@@ -9,21 +9,10 @@ This is just my experiment with parser combinators and Scala 3. Highly inspired 
 
 ## Install (sbt)
 
-1. Include GitHub packages plugin:
-```scala
-// plugins.sbt
-addSbtPlugin("com.codecommit" % "sbt-github-packages" % "0.5.3")
-```
-
-2. Add resolver:
-```scala
-// build.sbt
-resolvers += Resolver.githubPackages("wlad031")
-```
-
+1. Install [GitHub packages plugin](https://github.com/djspiewak/sbt-github-packages).
+2. Add `Resolver.githubPackages("wlad031")` resolver.
 3. Include dependency:
 ```scala
-// build.sbt
 libraryDependencies += "dev.vgerasimov" %% "slowparse" % "0.1.2",
 ```
 
