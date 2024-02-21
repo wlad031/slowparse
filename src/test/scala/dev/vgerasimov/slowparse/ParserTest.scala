@@ -5,6 +5,7 @@ import dev.vgerasimov.slowparse.Parsers.given
 import dev.vgerasimov.slowparse.POut.*
 import org.scalacheck.Prop.*
 import org.scalacheck.Gen
+import scala.annotation.alpha
 
 class ParserTest extends ParserTestSuite:
 
@@ -227,4 +228,11 @@ class ParserTest extends ParserTestSuite:
     testSuccess(parser)("abc\n", "abc")
     testSuccess(parser)("ab\nc", "ab")
     testSuccess(parser)("\nabc", "")
+  }
+
+  test("cut fails when needed") {
+    val andThenParser: P[String] = P(P("val ") ~ alpha.rep(1).! | P("def ") ~ alpha.rep(1).!)
+    testFailure(andThenParser)("val 1234")
+    val cutParser: P[String] = P(P("val ") ~/ alpha.rep(1).! | P("def ") ~/ alpha.rep(1).!)
+    testFailure(cutParser)("val 1234")
   }

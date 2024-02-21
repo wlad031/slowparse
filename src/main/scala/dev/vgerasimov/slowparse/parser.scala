@@ -70,6 +70,7 @@ extension [A](self: P[A])
   def ~ [B, C](next: P[B])(using Sequencer[A, B, C]): P[C] = Parsers.andThen(self, next)
   def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]): P[C] = self ~ Parsers.ws0 ~ next
   def ~-~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]): P[C] = self ~ Parsers.ws1 ~ next
+  def ~/ [B, C](next: P[B])(using Sequencer[A, B, C]): P[C] = Parsers.cut(self, next)
 
   def orElse[B](other: P[B]): P[A | B] = Parsers.orElse(self, other)
   def | [B](other: P[B]): P[A | B] = Parsers.orElse(self, other)
@@ -324,10 +325,13 @@ object Parsers:
   def orElse[A, B](parser1: P[A], parser2: P[B]): P[A | B] = input => {
     parser1(input) match
       case Success(v, parsed, remaining, _) => Success(v, parsed, remaining)
-      case Failure(message, _) =>
-        parser2(input) match
-          case Success(v, parsed, remaining, _) => Success(v, parsed, remaining)
-          case x: Failure                       => x.dropLabel
+      case f @ Failure(message, _) =>
+        parser1 match
+          case _: CutP[?] => f
+          case _ =>
+            parser2(input) match
+              case Success(v, parsed, remaining, _) => Success(v, parsed, remaining)
+              case x: Failure                       => x.dropLabel
   }
 
   def fromRange(range: scala.collection.immutable.NumericRange.Inclusive[Char]): P[Unit] = choice(range.map(char)*)
@@ -337,6 +341,13 @@ object Parsers:
       choice(ranges.map { case (fromChar, toChar) => fromRange(fromChar to toChar) }*)
     case _: Failure => ignoredInput => Failure(s"cannot parse given range: $range")
   private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
+
+  def cut[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] = 
+    new CutP[C]:
+      override def apply(input: String): POut[C] =
+        parser1.andThen(parser2)(input)
+
+  private trait CutP[+A] extends P[A]
 
 end Parsers
 
