@@ -278,6 +278,7 @@ object Parsers:
       .reduce((parser1, parser2) => andThen(parser1, parser2)(using _ ++ _))
 
   def choice[A](parsers: P[A]*): P[A] = parsers.reduce(orElse)
+  def choice[A](parsers: Iterable[P[A]]): P[A] = parsers.reduce(orElse)
 
   def rep[A](
     parser: P[A]
