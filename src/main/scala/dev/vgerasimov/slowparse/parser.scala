@@ -105,7 +105,7 @@ object Parsers:
   val success: P[Unit] = input => Success((), "", input)
 
   /** Always failing parser. */
-  val fail: P[Unit] = input => Failure("this parser always fails")
+  def fail[A]: P[A] = input => Failure("this parser always fails")
 
   /** Parses any single end-of-line character. */
   val eol: P[Unit] = anyFrom("\n\r").label("eol")
