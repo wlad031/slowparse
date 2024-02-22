@@ -230,6 +230,26 @@ class ParserTest extends ParserTestSuite:
     testSuccess(parser)("\nabc", "")
   }
 
+  test("*surrounded* should parse everything surrounded by two parsers") {
+    val parser = surrounded(P("a"), P("b"), d.+.!)
+    testSuccess(parser)("a123b", "123")
+    testSuccess(parser)("a12b3b", "12")
+    testFailure(parser)("a*1*b")
+  }
+
+  test("*surrounded* should parse everything surrounded by one parser") {
+    val parser = surrounded(P("*"), d.+.!)
+    testSuccess(parser)("*123*", "123")
+    testSuccess(parser)("*12*", "12")
+    testFailure(parser)("*12abc*")
+  }
+
+  test("*surrounded* should parse all characters surrounded by one parser") {
+    val parser = surrounded(P("```"))
+    testSuccess(parser)("```\nhello\nworld```", "\nhello\nworld")
+    testFailure(parser)("``fail``")
+  } 
+
   test("cut fails when needed") {
     val andThenParser: P[String] = P(P("val ") ~ alpha.rep(1).! | P("def ") ~ alpha.rep(1).!)
     testFailure(andThenParser)("val 1234")

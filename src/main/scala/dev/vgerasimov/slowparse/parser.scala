@@ -209,6 +209,22 @@ object Parsers:
   def until(parser: P[?], collector: P[?] = anyChar): P[Unit] =
     unCapture(rep(!parser ~ collector)(greedy = true))
 
+  // TODO: remove, seems completely unneeded
+  def surrounded[A](
+    fromParser: P[?],
+    toParser: P[?],
+    contentParser: P[A]
+  ): P[A] = fromParser.!! ~ contentParser ~ toParser.!!
+
+  def surrounded[A](
+    surroundingParser: P[?],
+    contentParser: P[A]
+  ): P[A] = surrounded(surroundingParser, surroundingParser, contentParser)
+
+  def surrounded(
+    surroundingParser: P[?]
+  ): P[String] = surrounded(surroundingParser, (!surroundingParser ~ anyChar.!).*).mkString
+
   /** Parses given character. */
   def char(char: Char): P[Unit] = input => {
     input.safeHead match
@@ -350,6 +366,9 @@ object Parsers:
   private trait CutP[+A] extends P[A]
 
 end Parsers
+
+extension (self: P[List[?]])
+  def mkString: P[String] = self.map(_.mkString)
 
 extension (self: String)
   private[slowparse] def safeHead: String = safeSlice(0, 1)
