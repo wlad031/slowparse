@@ -111,8 +111,14 @@ object Parsers:
   /** Parses any single end-of-line character. */
   val eol: P[Unit] = anyFrom("\n\r").label("eol")
 
+  /** Parses single tab character. */
+  val tab: P[Unit] = P('\t')
+
+  /** Parses single whitespace character. */
+  val space: P[Unit] = P(' ')
+
   /** Parses single whitespace or tab character. */
-  val s: P[Unit] = anyFrom(" \t").label("s")
+  val s: P[Unit] = (space | tab).label("s")
 
   /** Parses zero or more whitespace or tab characters and drops collected value. */
   val s0: P[Unit] = s.*.!!
@@ -358,7 +364,7 @@ object Parsers:
     case _: Failure => ignoredInput => Failure(s"cannot parse given range: $range")
   private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
 
-  def cut[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] = 
+  def cut[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] =
     new CutP[C]:
       override def apply(input: String): POut[C] =
         parser1.andThen(parser2)(input)
@@ -367,8 +373,7 @@ object Parsers:
 
 end Parsers
 
-extension (self: P[List[?]])
-  def mkString: P[String] = self.map(_.mkString)
+extension (self: P[List[?]]) def mkString: P[String] = self.map(_.mkString)
 
 extension (self: String)
   private[slowparse] def safeHead: String = safeSlice(0, 1)
