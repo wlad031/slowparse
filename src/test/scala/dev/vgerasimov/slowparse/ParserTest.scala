@@ -257,11 +257,8 @@ class ParserTest extends ParserTestSuite:
     testFailure(cutParser)("val 1234")
   }
 
-  test("*andThenDelayed* + *mapContinuable* is working properly") {
-    val parser1: ContinuableP[Int, (Int, String)] = andThenDelayed(d.!.map(_.toInt), P("A").!)
-    val parser2: ContinuableP[Int, String] = mapContinuable(parser1) { case (x: Int, s: String) =>
-      s.repeat(x)
-    }
+  test("*andLazyThen* is working properly") {
+    val parser1: AndLazyThen[Int, (Int, String)] = andLazyThen(d.!.map(_.toInt), P("A").!)
 
     parser1("3A") match
       case s @ Success((value1, f), parsed1, remaining1, _) =>
@@ -277,6 +274,13 @@ class ParserTest extends ParserTestSuite:
             fail(s"not continued: $f")
       case Failure(message, _) =>
         fail(s"not parsed: $message")
+  }
+
+  test("*mapAndLazyThen* is working properly") {
+    val parser1: AndLazyThen[Int, (Int, String)] = andLazyThen(d.!.map(_.toInt), P("A").!)
+    val parser2: AndLazyThen[Int, String] = mapAndLazyThen(parser1) { case (x: Int, s: String) =>
+      s.repeat(x)
+    }
 
     parser2("3A") match
       case s @ Success((value1, f), parsed1, remaining1, _) =>
@@ -292,5 +296,17 @@ class ParserTest extends ParserTestSuite:
             fail(s"not continued: $f")
       case Failure(message, _) =>
         fail(s"not parsed: $message")
+  }
 
+  test("*evalAndLazyThen* is working properly") {
+    val parser1: AndLazyThen[Int, (Int, String)] = andLazyThen(d.!.map(_.toInt), P("A").!)
+    val parser2: P[(Int, String)] = evalAndLazyThen(parser1)
+
+    parser2("3A") match
+      case s @ Success(value1, parsed1, remaining1, _) =>
+        assertEquals(value1, (3, "A"))
+        assertEquals(parsed1, "3A")
+        assertEquals(remaining1, "")
+      case Failure(message, _) =>
+        fail(s"not parsed: $message")
   }

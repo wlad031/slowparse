@@ -8,7 +8,7 @@ trait P[+A] extends (String => POut[A])
 
 /** A [[P]]arser that returns a pair of one value and a function that can be evaluated in order to "continue" parsing.
   */
-trait ContinuableP[A, +B] extends P[(A, () => POut[B])]
+trait AndLazyThen[A, +B] extends P[(A, () => POut[B])]
 
 /** Represents a result of parsing. */
 sealed trait POut[+A]
@@ -262,16 +262,6 @@ object Parsers:
   /** Applies given function to successful result of calling given parser. */
   def map[A, B](parser: P[A])(f: A => B): P[B] = input => parser(input).map(f)
 
-  def mapContinuable[A, B1, B2](
-    continuableP: ContinuableP[A, B1]
-  )(f: B1 => B2): ContinuableP[A, B2] =
-    input => {
-      continuableP(input) match
-        case Success((v, next), parsed, remaining, _) =>
-          Success((v, () => next().map(f)), parsed, remaining)
-        case f: Failure => f
-    }
-
   /** Applies given function returning another parser to successful result of calling given parser. */
   def flatMap[A, B](parser: P[A])(f: A => P[B]): P[B] = input => {
     parser(input) match
@@ -306,24 +296,6 @@ object Parsers:
             Success(sequencer(value1, value2), parsed1 + parsed2, remaining)
           case Failure(message, _) => Failure(message)
       case Failure(message, _) => Failure(message)
-  }
-
-  def andThenDelayed[A, B, C](parser1: P[A], parser2: => P[B])(using
-    sequencer: Sequencer[A, B, C]
-  ): ContinuableP[A, C] = input => {
-    parser1(input) match
-      case s @ Success(value1, parsed1, remaining, _) =>
-        Success(
-          (
-            value1,
-            () => {
-              parser2(remaining).map(value => sequencer(value1, value))
-            }
-          ),
-          parsed1,
-          remaining
-        )
-      case f: Failure => f
   }
 
   /** Concatenates given sequence of parsers. */
@@ -402,6 +374,38 @@ object Parsers:
         parser1.andThen(parser2)(input)
 
   private trait CutP[+A] extends P[A]
+
+  def andLazyThen[A, B, C](parser1: P[A], parser2: => P[B])(using
+    sequencer: Sequencer[A, B, C]
+  ): AndLazyThen[A, C] = input => {
+    parser1(input) match
+      case Success(value1, parsed1, remaining, _) =>
+        Success(
+          (value1, () => parser2(remaining).map(sequencer(value1, _))),
+          parsed1,
+          remaining
+        )
+      case Failure(message, _) => Failure(message)
+  }
+
+  def mapAndLazyThen[A, B1, B2](
+    andLazyThen: AndLazyThen[A, B1]
+  )(f: B1 => B2): AndLazyThen[A, B2] =
+    input => {
+      andLazyThen(input) match
+        case Success((v, next), parsed, remaining, _) =>
+          Success((v, () => next().map(f)), parsed, remaining)
+        case f: Failure => f
+    }
+
+  def evalAndLazyThen[A, B](andLazyThen: AndLazyThen[A, B]): P[B] = input => {
+    andLazyThen(input) match
+      case Success((v, next), parsed1, _, _) =>
+        next() match
+          case Success(value, parsed2, remaining, _) => Success(value, parsed1 + parsed2, remaining)
+          case f: Failure                            => f
+      case f: Failure => f
+  }
 
 end Parsers
 
