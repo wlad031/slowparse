@@ -248,11 +248,49 @@ class ParserTest extends ParserTestSuite:
     val parser = surrounded(P("```"))
     testSuccess(parser)("```\nhello\nworld```", "\nhello\nworld")
     testFailure(parser)("``fail``")
-  } 
+  }
 
-  test("cut fails when needed") {
+  test("*cut* fails when needed") {
     val andThenParser: P[String] = P(P("val ") ~ alpha.rep(1).! | P("def ") ~ alpha.rep(1).!)
     testFailure(andThenParser)("val 1234")
     val cutParser: P[String] = P(P("val ") ~/ alpha.rep(1).! | P("def ") ~/ alpha.rep(1).!)
     testFailure(cutParser)("val 1234")
+  }
+
+  test("*andThenDelayed* + *mapContinuable* is working properly") {
+    val parser1: ContinuableP[Int, (Int, String)] = andThenDelayed(d.!.map(_.toInt), P("A").!)
+    val parser2: ContinuableP[Int, String] = mapContinuable(parser1) { case (x: Int, s: String) =>
+      s.repeat(x)
+    }
+
+    parser1("3A") match
+      case s @ Success((value1, f), parsed1, remaining1, _) =>
+        assertEquals(value1, 3)
+        assertEquals(parsed1, "3")
+        assertEquals(remaining1, "A")
+        f() match
+          case Success(value2, parsed2, remaining3, _) =>
+            assertEquals(value2, (3, "A"))
+            assertEquals(parsed2, "A")
+            assertEquals(remaining3, "")
+          case f: Failure =>
+            fail(s"not continued: $f")
+      case Failure(message, _) =>
+        fail(s"not parsed: $message")
+
+    parser2("3A") match
+      case s @ Success((value1, f), parsed1, remaining1, _) =>
+        assertEquals(value1, 3)
+        assertEquals(parsed1, "3")
+        assertEquals(remaining1, "A")
+        f() match
+          case Success(value2, parsed2, remaining3, _) =>
+            assertEquals(value2, "AAA")
+            assertEquals(parsed2, "A")
+            assertEquals(remaining3, "")
+          case f: Failure =>
+            fail(s"not continued: $f")
+      case Failure(message, _) =>
+        fail(s"not parsed: $message")
+
   }
