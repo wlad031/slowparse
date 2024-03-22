@@ -11,6 +11,7 @@ val root = project
     githubRepository := "slowparse",
     publishConfiguration := publishConfiguration.value.withOverwrite(true),
     publishLocalConfiguration := publishLocalConfiguration.value.withOverwrite(true),
+    publishM2Configuration := publishM2Configuration.value.withOverwrite(true),
     scalacOptions ++= Seq(
       "-rewrite",
       "-source", "future"
