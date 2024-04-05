@@ -71,6 +71,7 @@ trait Sequencer[-A, -B, +C] extends ((A, B) => C)
 extension [A](self: P[A])
 
   def andThen[B, C](next: P[B])(using Sequencer[A, B, C]): P[C] = Parsers.andThen(self, next)
+  def andThenFlatMap[B, C](next: A => P[B])(using Sequencer[A, B, C]): P[C] = Parsers.andThenFlatMap(self, next)
   def ~ [B, C](next: P[B])(using Sequencer[A, B, C]): P[C] = Parsers.andThen(self, next)
   def ~~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]): P[C] = self ~ Parsers.ws0 ~ next
   def ~-~ [B, C](next: P[B])(using Sequencer[A, Unit, A], Sequencer[A, B, C]): P[C] = self ~ Parsers.ws1 ~ next
@@ -292,6 +293,17 @@ object Parsers:
     parser1(input) match
       case Success(value1, parsed1, remaining, _) =>
         parser2(remaining) match
+          case Success(value2, parsed2, remaining, _) =>
+            Success(sequencer(value1, value2), parsed1 + parsed2, remaining)
+          case Failure(message, _) => Failure(message)
+      case Failure(message, _) => Failure(message)
+  }
+
+  /** Concatenates two given parsers in a flatMap manner. */
+  def andThenFlatMap[A, B, C](parser1: P[A], parser2: A => P[B])(using sequencer: Sequencer[A, B, C]): P[C] = input => {
+    parser1(input) match
+      case Success(value1, parsed1, remaining, _) =>
+        parser2(value1)(remaining) match
           case Success(value2, parsed2, remaining, _) =>
             Success(sequencer(value1, value2), parsed1 + parsed2, remaining)
           case Failure(message, _) => Failure(message)
