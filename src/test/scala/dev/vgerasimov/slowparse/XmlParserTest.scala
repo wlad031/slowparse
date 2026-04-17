@@ -12,10 +12,10 @@ class XmlParserTest extends ParserTestSuite {
     val leftTag: P[String] = P("<") ~ (!P(">") ~ anyChar).+.! ~ P(">")
     def rightTag(s: String): P[String] = P("</") ~ P(s).! ~ P(">")
     val xml =
-      for {
+      for
         s     <- leftTag
         right <- rightTag(s)
-      } yield right
+      yield right
 
     // FIXME: wtf is this Gen
     forAllNoShrink(Gen.nonEmptyListOf(Gen.alphaNumChar)) { (ls: List[Char]) =>

@@ -3,7 +3,7 @@ import Tasks.generateSequencers
 val root = project
   .in(file("."))
   .settings(
-    scalaVersion := "3.3.1",
+    scalaVersion := "3.8.3",
     organization := "dev.vgerasimov",
     name := "slowparse",
     version := "0.2.1",

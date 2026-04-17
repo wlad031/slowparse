@@ -40,7 +40,7 @@ object POut:
       Failure(
         s"""|Expected: $expected
           |Got:      $got
-          |   ${if (ctx._1.isEmpty) "   " else "..."}${ctx._1}${ctx._2}${if (ctx._2.isEmpty) "   " else "..."}
+          |   ${if ctx._1.isEmpty then "   " else "..."}${ctx._1}${ctx._2}${if ctx._2.isEmpty then "   " else "..."}
           |      ${" ".repeat(ctx._1.length)}^
       """.stripMargin,
         parserLabel
@@ -176,9 +176,9 @@ object Parsers:
     var toParse = input
     var remaining = toParse
     var parsed = ""
-    while (toParse.nonEmpty) {
+    while toParse.nonEmpty do {
       val char = toParse.head
-      if (condition(char)) {
+      if condition(char) then {
         parsed += char
         toParse = toParse.tail
         remaining = toParse
@@ -332,9 +332,9 @@ object Parsers:
     require(min <= max, s"got min reps = $min; must be not greater than max reps = $max")
     val nextParser = sep.map(andThen(_, parser)).getOrElse(parser)
     @tailrec def iter(i: Int, parser: P[A], values: List[A], parsed: String, remaining: String): POut[List[A]] =
-      if (i == max || (i == min && !greedy)) Success(values, parsed, remaining)
-      else if (remaining.isEmpty)
-        if (i < min) Failure(s"expected minimum $min repetions, but parsed only $i")
+      if i == max || (i == min && !greedy) then Success(values, parsed, remaining)
+      else if remaining.isEmpty then
+        if i < min then Failure(s"expected minimum $min repetions, but parsed only $i")
         else Success(values, parsed, remaining)
       else
         parser(remaining) match

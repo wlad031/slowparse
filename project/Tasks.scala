@@ -1,15 +1,15 @@
 object Tasks {
 
   private val dropUnits: String =
-    """  given dropBothUnits: Sequencer[Unit, Unit, Unit] with {
+    """  given dropBothUnits: Sequencer[Unit, Unit, Unit] = new Sequencer[Unit, Unit, Unit] {
       |    override def apply(l: Unit, r: Unit) = ()
       |  }
       |
-      |  given dropLeftUnit[R : nu]: Sequencer[Unit, R, R] with {
+      |  given dropLeftUnit: [R] => nu[R] => Sequencer[Unit, R, R] = new Sequencer[Unit, R, R] {
       |    override def apply(l: Unit, r: R) = r
       |  }
       |
-      |  given dropRightUnit[L : nu]: Sequencer[L, Unit, L] with {
+      |  given dropRightUnit: [L] => nu[L] => Sequencer[L, Unit, L] = new Sequencer[L, Unit, L] {
       |    override def apply(l: L, r: Unit) = l
       |  }
       |""".stripMargin
@@ -17,7 +17,7 @@ object Tasks {
   private def nthSequencer(n: Int): String = {
     require(n > 2)
     val tNminus1 = (1 until n).map(i => s"T$i").mkString(",")
-    s"""  given toTuple$n[$tNminus1, R : nu]: Sequencer[($tNminus1), R, ($tNminus1, R)] with {
+    s"""  given toTuple$n: [$tNminus1, R] => nu[R] => Sequencer[($tNminus1), R, ($tNminus1, R)] = new Sequencer[($tNminus1), R, ($tNminus1, R)] {
        |    override def apply(l: ($tNminus1), r: R) = (${(1 until n).map(i => s"l._$i").mkString(",")}, r)
        |  }
        |""".stripMargin
@@ -25,7 +25,7 @@ object Tasks {
 
   private def toTuple2(n: Int): String = {
     require(n > 2)
-    s"""  given toTuple2[L : nu : ${(2 until n).map(i => s"nt$i").mkString(":")}, R : nu]: Sequencer[L, R, (L, R)] with {
+    s"""  given toTuple2: [L, R] => nu[L] => Not[L <:< Tuple] => nu[R] => Sequencer[L, R, (L, R)] = new Sequencer[L, R, (L, R)] {
        |    override def apply(l: L, r: R) = (l, r)
        |  }
        |""".stripMargin
