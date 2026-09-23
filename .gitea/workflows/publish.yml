@@ -1,0 +1,24 @@
+name: Publish Gitea package
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    if: gitea.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Publish tagged artifact
+        env:
+          GITEA_USERNAME: wlad031
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          VERSION="${{ gitea.ref_name }}"
+          VERSION="${VERSION#v}"
+          VERSION="$VERSION" sbt clean test publish
