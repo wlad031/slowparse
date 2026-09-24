@@ -3,7 +3,7 @@ val artifactVersion = sys.env.getOrElse("VERSION", "0.2.1-SNAPSHOT")
 val giteaCredentials = for {
   username <- sys.env.get("GITEA_USERNAME")
   token <- sys.env.get("GITEA_TOKEN")
-} yield Credentials("Gitea API", "gitea.local.vgerasimov.dev", username, token)
+} yield Credentials("Gitea Package API", "gitea.local.vgerasimov.dev", username, token)
 
 import Tasks.generateSequencers
 
