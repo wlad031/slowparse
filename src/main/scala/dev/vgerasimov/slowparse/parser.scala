@@ -172,21 +172,10 @@ object Parsers:
   def charsWhile(
     condition: Char => Boolean
   ): P[String] = input => {
-    // TODO: Maybe I should rewrite it in a more functional style.
-    var toParse = input
-    var remaining = toParse
-    var parsed = ""
-    while toParse.nonEmpty do {
-      val char = toParse.head
-      if condition(char) then {
-        parsed += char
-        toParse = toParse.tail
-        remaining = toParse
-      } else {
-        toParse = ""
-      }
-    }
-    Success(parsed, parsed, remaining)
+    var consumed = 0
+    while consumed < input.length && condition(input.charAt(consumed)) do consumed += 1
+    val parsed = input.substring(0, consumed)
+    Success(parsed, parsed, input.substring(consumed))
   }
 
   /** Parses all characters until some of them is presented in given string. */
@@ -214,7 +203,9 @@ object Parsers:
   val eolOrEnd: P[Unit] = eol | end
 
   /** Parses any character from the given string. */
-  def anyFrom(chars: String): P[Unit] = choice(chars.map(char)*)
+  def anyFrom(chars: String): P[Unit] =
+    if chars.isEmpty then fail
+    else choice(chars.map(char)*)
 
   /** Parses everyting until given parser succeed. */
   def until(parser: P[?], collector: P[?] = anyChar): P[Unit] =
@@ -316,8 +307,8 @@ object Parsers:
       .map(parser => map(parser)(List(_)))
       .reduce((parser1, parser2) => andThen(parser1, parser2)(using _ ++ _))
 
-  def choice[A](parsers: P[A]*): P[A] = parsers.reduce(orElse)
-  def choice[A](parsers: Iterable[P[A]]): P[A] = parsers.reduce(orElse)
+  def choice[A](parsers: P[A]*): P[A] = parsers.reduceOption(orElse).getOrElse(fail)
+  def choice[A](parsers: Iterable[P[A]]): P[A] = parsers.reduceOption(orElse).getOrElse(fail)
 
   def rep[A](
     parser: P[A]
@@ -338,7 +329,9 @@ object Parsers:
         else Success(values, parsed, remaining)
       else
         parser(remaining) match
-          case Success(v, p, r, _) if condition(v)         => iter(i + 1, nextParser, v :: values, parsed + p, r)
+          case Success(v, _, r, _) if r == remaining && condition(v) =>
+            Failure("repetition parser consumed no input")
+          case Success(v, p, r, _) if condition(v) => iter(i + 1, nextParser, v :: values, parsed + p, r)
           case Success(v, p, r, _) if min <= i && i <= max => Success(values, parsed, remaining)
           case _: Failure if min <= i && i <= max          => Success(values, parsed, remaining)
           // TODO: make error message more meaningful

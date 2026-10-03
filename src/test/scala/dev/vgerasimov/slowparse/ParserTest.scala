@@ -164,6 +164,11 @@ class ParserTest extends ParserTestSuite:
     forAllNoShrink(Gen.alphaNumChar) { (x: Char) => testSuccess(fromRange("a-z0-9A-Z").!)(x.toString, x.toString) }
   }
 
+  test("*anyFrom* and *fromRange* should fail predictably for empty choices") {
+    testFailure(anyFrom(""))("x")
+    testFailure(fromRange('z' to 'a'))("x")
+  }
+
   test("non-greedy *rep(min, max)* should work properly") {
     val parser = P("a").rep(min = 3, max = 5, greedy = false).!
     testSuccess(parser)("aaa", "aaa")
@@ -182,6 +187,10 @@ class ParserTest extends ParserTestSuite:
     testSuccess(parser)("aaaaaaa", "aaaaa")
     testFailure(parser)("a")
     testFailure(parser)("aa")
+  }
+
+  test("*rep* should fail instead of recursing on zero-width success") {
+    testFailure(success.rep())("input")
   }
 
   test("*until* should parse all characters before given one") {
@@ -212,6 +221,12 @@ class ParserTest extends ParserTestSuite:
     val parser = charsWhile(_.isLower)
     testSuccess(parser)("aA", "a")
     testSuccess(parser)("abcAbc", "abc")
+    val longInput = "a" * 10_000 + "Z"
+    parser(longInput) match
+      case Success(value, _, remaining, _) =>
+        assertEquals(value.length, 10_000)
+        assertEquals(remaining, "Z")
+      case _: Failure => fail("long matching input was not parsed")
   }
 
   test("*charsUntilIn* should parse all characters which are not in the given string") {
