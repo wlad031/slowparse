@@ -231,7 +231,7 @@ object Parsers:
   def & [A](parser: P[A]): P[A] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, _, _, label) => InternalSuccess(value, offset, offset, label)
-      case failure: InternalFailure => failure
+      case failure: InternalFailure            => failure
   })
 
   /** Parses returning failure only if input is empty. */
@@ -272,7 +272,8 @@ object Parsers:
   def char(char: Char): P[Unit] =
     val failure = InternalFailure(s"expected: $char")
     public(internal { (source, offset) =>
-      if offset < source.value.length && source.value.charAt(offset) == char then InternalSuccess((), offset, offset + 1)
+      if offset < source.value.length && source.value.charAt(offset) == char then
+        InternalSuccess((), offset, offset + 1)
       else failure
     })
 
@@ -288,28 +289,28 @@ object Parsers:
   def label[A](parser: P[A])(string: String): P[A] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, start, end, _) => InternalSuccess(value, start, end, Some(string))
-      case InternalFailure(message, _) => InternalFailure(message, Some(string))
+      case InternalFailure(message, _)           => InternalFailure(message, Some(string))
   })
 
   /** Applies given function to successful result of calling given parser. */
   def map[A, B](parser: P[A])(f: A => B): P[B] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, start, end, label) => InternalSuccess(f(value), start, end, label)
-      case failure: InternalFailure => failure
+      case failure: InternalFailure                  => failure
   })
 
   /** Applies given function returning another parser to successful result of calling given parser. */
   def flatMap[A, B](parser: P[A])(f: A => P[B]): P[B] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, _, end, _) => f(value).run(source, end)
-      case failure: InternalFailure => failure
+      case failure: InternalFailure          => failure
   })
 
   /** Wraps result of calling given parser into [[Option]], thus, never fails. */
   def optional[A](parser: P[A]): P[Option[A]] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, start, end, label) => InternalSuccess(Some(value), start, end, label)
-      case _: InternalFailure => InternalSuccess(None, offset, offset)
+      case _: InternalFailure                        => InternalSuccess(None, offset, offset)
   })
 
   /** Unwraps parser returning [[Option]] by failing if result is `None`. */
@@ -320,7 +321,7 @@ object Parsers:
     parser.run(source, offset) match
       case success @ InternalSuccess(value, _, _, _) if cond(value) => success
       case InternalSuccess(value, _, _, _) => InternalFailure(s"parsed value $value doesn't satisfy given condition")
-      case failure: InternalFailure => failure
+      case failure: InternalFailure        => failure
   })
 
   /** Concatenates two given parsers. */
@@ -330,7 +331,7 @@ object Parsers:
         case InternalSuccess(value1, start, end, _) =>
           parser2.run(source, end) match
             case InternalSuccess(value2, _, next, _) => InternalSuccess(sequencer(value1, value2), start, next)
-            case InternalFailure(message, label) => InternalFailure(message, label)
+            case InternalFailure(message, label)     => InternalFailure(message, label)
         case InternalFailure(message, label) => InternalFailure(message, label)
     })
 
@@ -341,7 +342,7 @@ object Parsers:
         case InternalSuccess(value1, start, end, _) =>
           parser2(value1).run(source, end) match
             case InternalSuccess(value2, _, next, _) => InternalSuccess(sequencer(value1, value2), start, next)
-            case InternalFailure(message, label) => InternalFailure(message, label)
+            case InternalFailure(message, label)     => InternalFailure(message, label)
         case InternalFailure(message, label) => InternalFailure(message, label)
     })
 
@@ -372,22 +373,24 @@ object Parsers:
         else if offset == source.value.length then
           if i < min then InternalFailure(s"expected minimum $min repetions, but parsed only $i")
           else InternalSuccess(values.reverse, initialOffset, offset)
-        else current.run(source, offset) match
-          case InternalSuccess(value, _, next, _) if next == offset && condition(value) =>
-            InternalFailure("repetition parser consumed no input")
-          case InternalSuccess(value, _, next, _) if condition(value) =>
-            iter(i + 1, nextParser, value :: values, next)
-          case _: InternalSuccess[?] if min <= i && i <= max =>
-            InternalSuccess(values.reverse, initialOffset, offset)
-          case _: InternalFailure if min <= i && i <= max =>
-            InternalSuccess(values.reverse, initialOffset, offset)
-          case _ => InternalFailure("rep failed")
+        else
+          current.run(source, offset) match
+            case InternalSuccess(value, _, next, _) if next == offset && condition(value) =>
+              InternalFailure("repetition parser consumed no input")
+            case InternalSuccess(value, _, next, _) if condition(value) =>
+              iter(i + 1, nextParser, value :: values, next)
+            case _: InternalSuccess[?] if min <= i && i <= max =>
+              InternalSuccess(values.reverse, initialOffset, offset)
+            case _: InternalFailure if min <= i && i <= max =>
+              InternalSuccess(values.reverse, initialOffset, offset)
+            case _ => InternalFailure("rep failed")
       iter(0, parser, Nil, initialOffset)
     })
 
   def capture(parser: P[?]): P[String] = public(internal { (source, offset) =>
     parser.run(source, offset) match
-      case InternalSuccess(_, start, end, label) => InternalSuccess(source.value.substring(start, end), start, end, label)
+      case InternalSuccess(_, start, end, label) =>
+        InternalSuccess(source.value.substring(start, end), start, end, label)
       case failure: InternalFailure => failure
   })
 
@@ -396,7 +399,7 @@ object Parsers:
   def not(parser: P[?]): P[Unit] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, _, _, _) => InternalFailure(s"unexpected: $value")
-      case _: InternalFailure => InternalSuccess((), offset, offset)
+      case _: InternalFailure              => InternalSuccess((), offset, offset)
   })
 
   def orElse[A, B](parser1: P[A], parser2: P[B]): P[A | B] = public(internal { (source, offset) =>
@@ -405,9 +408,10 @@ object Parsers:
       case failure: InternalFailure =>
         parser1 match
           case _: CutP[?] => failure
-          case _ => parser2.run(source, offset) match
-            case success: InternalSuccess[B] => success
-            case failure: InternalFailure => InternalFailure(failure.message)
+          case _ =>
+            parser2.run(source, offset) match
+              case success: InternalSuccess[B] => success
+              case failure: InternalFailure    => InternalFailure(failure.message)
   })
 
   def fromRange(range: scala.collection.immutable.NumericRange.Inclusive[Char]): P[Unit] = choice(range.map(char)*)
@@ -420,8 +424,9 @@ object Parsers:
 
   def cut[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] =
     new CutP[C]:
-      override def apply(input: String): POut[C] =
-        parser1.andThen(parser2)(input)
+      private val combined = Parsers.andThen(parser1, parser2)
+      override def run(source: Source, offset: Int): InternalOut[C] = combined.run(source, offset)
+      override def apply(input: String): POut[C] = combined(input)
 
   private trait CutP[+A] extends P[A]
 
@@ -431,14 +436,29 @@ object Parsers:
     override def run(source: Source, offset: Int): InternalOut[(A, () => POut[C])] =
       parser1.run(source, offset) match
         case InternalSuccess(value1, start, end, label) =>
-          InternalSuccess((value1, () => parser2.run(source, end) match
-            case InternalSuccess(value2, parsedStart, parsedEnd, nextLabel) =>
-              Success(sequencer(value1, value2), source.value.substring(parsedStart, parsedEnd), source.value.substring(parsedEnd), nextLabel)
-            case InternalFailure(message, nextLabel) => Failure(message, nextLabel)), start, end, label)
+          InternalSuccess(
+            (
+              value1,
+              () =>
+                parser2.run(source, end) match
+                  case InternalSuccess(value2, parsedStart, parsedEnd, nextLabel) =>
+                    Success(
+                      sequencer(value1, value2),
+                      source.value.substring(parsedStart, parsedEnd),
+                      source.value.substring(parsedEnd),
+                      nextLabel
+                    )
+                  case InternalFailure(message, nextLabel) => Failure(message, nextLabel)
+            ),
+            start,
+            end,
+            label
+          )
         case failure: InternalFailure => failure
     override def apply(input: String): POut[(A, () => POut[C])] =
       run(Source(input), 0) match
-        case InternalSuccess(value, start, end, label) => Success(value, input.substring(start, end), input.substring(end), label)
+        case InternalSuccess(value, start, end, label) =>
+          Success(value, input.substring(start, end), input.substring(end), label)
         case InternalFailure(message, label) => Failure(message, label)
 
   def mapAndLazyThen[A, B1, B2](
@@ -446,18 +466,22 @@ object Parsers:
   )(f: B1 => B2): AndLazyThen[A, B2] = new AndLazyThen[A, B2]:
     override def run(source: Source, offset: Int): InternalOut[(A, () => POut[B2])] =
       andLazyThen.run(source, offset) match
-        case InternalSuccess((value, next), start, end, label) => InternalSuccess((value, () => next().map(f)), start, end, label)
+        case InternalSuccess((value, next), start, end, label) =>
+          InternalSuccess((value, () => next().map(f)), start, end, label)
         case failure: InternalFailure => failure
     override def apply(input: String): POut[(A, () => POut[B2])] =
       run(Source(input), 0) match
-        case InternalSuccess(value, start, end, label) => Success(value, input.substring(start, end), input.substring(end), label)
+        case InternalSuccess(value, start, end, label) =>
+          Success(value, input.substring(start, end), input.substring(end), label)
         case InternalFailure(message, label) => Failure(message, label)
 
   def evalAndLazyThen[A, B](andLazyThen: AndLazyThen[A, B]): P[B] = public(internal { (source, offset) =>
     andLazyThen.run(source, offset) match
-      case InternalSuccess((_, next), start, _, _) => next() match
-        case Success(value, _, remaining, label) => InternalSuccess(value, start, source.value.length - remaining.length, label)
-        case Failure(message, label) => InternalFailure(message, label)
+      case InternalSuccess((_, next), start, _, _) =>
+        next() match
+          case Success(value, _, remaining, label) =>
+            InternalSuccess(value, start, source.value.length - remaining.length, label)
+          case Failure(message, label) => InternalFailure(message, label)
       case failure: InternalFailure => failure
   })
 
