@@ -325,3 +325,13 @@ class ParserTest extends ParserTestSuite:
       case Failure(message, _) =>
         fail(s"not parsed: $message")
   }
+
+  test("*evalAndLazyThen* preserves public span fields with trailing input") {
+    val parser = evalAndLazyThen(andLazyThen(d.!.map(_.toInt), P("A").!))
+    parser("3A!") match
+      case Success(value, parsed, remaining, _) =>
+        assertEquals(value, (3, "A"))
+        assertEquals(parsed, "3A")
+        assertEquals(remaining, "!")
+      case Failure(message, _) => fail(s"not parsed: $message")
+  }
