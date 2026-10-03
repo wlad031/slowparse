@@ -16,6 +16,13 @@ trait ParserTestSuite extends munit.ScalaCheckSuite:
       )
     case POut.Failure(msg, _) => fail(s"not parsed: $toParse, failure: \n$msg")
 
+  /** Checks that parser consumed the complete input and returned the expected result. */
+  def testFullSuccess[A](parser: P[A])(toParse: String, expected: A): Unit = parser(toParse) match
+    case POut.Success(v, _, remaining, _) =>
+      assertEquals(v, expected)
+      assertEquals(remaining, "", s"Parser accepted trailing input: $remaining")
+    case POut.Failure(msg, _) => fail(s"not parsed: $toParse, failure: \n$msg")
+
   /** Checks that parser couldn't parse given string. */
   def testFailure[A](parser: P[A])(toParse: String) = parser(toParse) match
     case x: POut.Success[A] => fail(s"parsed: $toParse, success: $x")

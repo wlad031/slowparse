@@ -11,10 +11,12 @@ This is just my experiment with parser combinators and Scala 3. Highly inspired 
 
 1. Install [GitHub packages plugin](https://github.com/djspiewak/sbt-github-packages).
 2. Add `Resolver.githubPackages("wlad031")` resolver.
-3. Include dependency:
+3. Include the latest documented release dependency:
 ```scala
-libraryDependencies += "dev.vgerasimov" %% "slowparse" % "0.1.2",
+libraryDependencies += "dev.vgerasimov" %% "slowparse" % "0.1.4",
 ```
+
+`0.1.4` is the latest release recorded in this changelog. The build's default `0.2.1-SNAPSHOT` is a development version, not installation guidance.
 
 ## Example
 
@@ -44,17 +46,17 @@ val pNum: P[JNumber] =
 val pStr: P[JString] =
   (P("\"") ~ until(!P("\\") ~ P("\""), (P("\\\"") | anyChar)).! ~ (!P("\\") ~ P("\"")))
     .map(JString(_))
-val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
-val pArr: P[JArray] = P("[") ~~ pChoice
+lazy val pChoice: P[Json] = P(choice(pNull, pBool, pNum, pStr, pArr, pObj))
+lazy val pArr: P[JArray] = P("[") ~~ pChoice
   .rep(sep = Some(ws0 ~ P(",") ~ ws0))
   .map(JArray(_)) ~~ P("]")
-val pObj: P[JObject] =
+lazy val pObj: P[JObject] =
   val pair: P[(String, Json)] = pStr.map(_.v) ~~ P(":") ~~ pChoice
   val pairs: P[List[(String, Json)]] = pair.rep(sep = Some(ws0 ~ P(",") ~ ws0))
   P("{") ~~ pairs.map(_.toMap).map(JObject(_)) ~~ P("}")
 
-// final parser
-val json: P[Json] = P(pObj | pArr)
+// final parser: accepts optional surrounding whitespace and requires all input
+val json: P[Json] = ws0 ~~ P(pObj | pArr) ~~ ws0 ~~ end
 ```
 
 ## Performance benchmarks

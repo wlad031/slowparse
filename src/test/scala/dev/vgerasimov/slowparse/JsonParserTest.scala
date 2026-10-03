@@ -31,7 +31,7 @@ class JsonParserTest extends ParserTestSuite:
     val pairs: P[List[(String, Json)]] = pair.rep(sep = Some(ws0 ~ P(",") ~ ws0))
     P("{") ~~ pairs.map(_.toMap).map(JObject.apply) ~~ P("}")
 
-  val json: P[Json] = P(pObj | pArr)
+  val json: P[Json] = ws0 ~~ P(pObj | pArr) ~~ ws0 ~~ end
 
   test("*pNull* should parse null") { testSuccess(pNull)("null", JNull) }
   test("*pBool* should parse false") { testSuccess(pBool)("false", JBoolean(false)) }
@@ -111,5 +111,9 @@ class JsonParserTest extends ParserTestSuite:
         "a1" -> JArray(List(JObject(Map()), JNull, JObject(Map("foo" -> JNull))))
       )
     )
-    testSuccess(json)(toParse, expected)
+    testFullSuccess(json)(toParse, expected)
+  }
+
+  test("*json* should reject trailing input") {
+    testFailure(json)("{\"valid\":true} trailing")
   }
