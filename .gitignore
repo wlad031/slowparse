@@ -10,3 +10,6 @@ project/*
 !project/Tasks.scala
 !project/build.properties
 !project/plugins.sbt
+
+# Local pi goal/audit runtime state
+.pi-glla/
