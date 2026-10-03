@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.2.3]
+
+### Fixed
+
+- Release publishing now uses the repository package credentials in tag-triggered CI.
+
 ## [0.2.2]
 
 ### Changed

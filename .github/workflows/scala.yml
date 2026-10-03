@@ -35,7 +35,7 @@ jobs:
           java-version: "17"
       - name: Publish release artifact
         env:
-          GITEA_USERNAME: ${{ secrets.GITEA_USERNAME }}
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_USERNAME: ${{ secrets.PACKAGE_USERNAME }}
+          GITEA_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
           VERSION: ${{ github.ref_name }}
         run: VERSION="${VERSION#v}" sbt publish
