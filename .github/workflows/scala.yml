@@ -3,6 +3,7 @@ name: Scala CI
 on:
   push:
     branches: [ master ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ master ]
 
@@ -20,3 +21,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: sbt clean update scalafmtCheck compile test
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Publish release artifact
+        env:
+          GITEA_USERNAME: ${{ secrets.GITEA_USERNAME }}
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: VERSION="${VERSION#v}" sbt publish

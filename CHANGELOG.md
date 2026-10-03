@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.2.2]
+
+### Changed
+
+- Parser internals now use immutable source offsets and spans to reduce intermediate string allocation.
+- Cut commitment now survives labels and nested combinators; flat-mapped captures retain their full consumed span.
+
 ## [0.1.0] - 2021-02-24
 
 Initial release.
