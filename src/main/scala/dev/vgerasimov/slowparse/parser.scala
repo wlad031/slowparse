@@ -289,8 +289,8 @@ object Parsers:
   /** Attaches given label to the parser. */
   def label[A](parser: P[A])(string: String): P[A] = public(internal { (source, offset) =>
     parser.run(source, offset) match
-      case InternalSuccess(value, start, end, _) => InternalSuccess(value, start, end, Some(string))
-      case InternalFailure(message, _, _)        => InternalFailure(message, Some(string))
+      case InternalSuccess(value, start, end, _)  => InternalSuccess(value, start, end, Some(string))
+      case InternalFailure(message, _, committed) => InternalFailure(message, Some(string), committed)
   })
 
   /** Applies given function to successful result of calling given parser. */
@@ -334,9 +334,9 @@ object Parsers:
       parser1.run(source, offset) match
         case InternalSuccess(value1, start, end, _) =>
           parser2.run(source, end) match
-            case InternalSuccess(value2, _, next, _) => InternalSuccess(sequencer(value1, value2), start, next)
-            case InternalFailure(message, label, _)  => InternalFailure(message, label)
-        case InternalFailure(message, label, _) => InternalFailure(message, label)
+            case InternalSuccess(value2, _, next, _)        => InternalSuccess(sequencer(value1, value2), start, next)
+            case InternalFailure(message, label, committed) => InternalFailure(message, label, committed)
+        case InternalFailure(message, label, committed) => InternalFailure(message, label, committed)
     })
 
   /** Concatenates two given parsers in a flatMap manner. */
@@ -345,9 +345,9 @@ object Parsers:
       parser1.run(source, offset) match
         case InternalSuccess(value1, start, end, _) =>
           parser2(value1).run(source, end) match
-            case InternalSuccess(value2, _, next, _) => InternalSuccess(sequencer(value1, value2), start, next)
-            case InternalFailure(message, label, _)  => InternalFailure(message, label)
-        case InternalFailure(message, label, _) => InternalFailure(message, label)
+            case InternalSuccess(value2, _, next, _)        => InternalSuccess(sequencer(value1, value2), start, next)
+            case InternalFailure(message, label, committed) => InternalFailure(message, label, committed)
+        case InternalFailure(message, label, committed) => InternalFailure(message, label, committed)
     })
 
   /** Concatenates given sequence of parsers. */

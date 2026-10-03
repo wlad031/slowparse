@@ -278,6 +278,13 @@ class ParserTest extends ParserTestSuite:
     testSuccess(P(P("x") ~/ P("b") | P("ac")).!) ("ac", "ac")
   }
 
+  test("*cut* commitment survives labels and nesting") {
+    val labeled = (P("a") ~/ P("b")).label("cut") | P("ac")
+    testFailure(labeled)("ac")
+    val nested = P("x") ~ (P("a") ~/ P("b")) | P("xac")
+    testFailure(nested)("xac")
+  }
+
   test("*flatMap* preserves its full capture span") {
     val parser = P("a").flatMap(_ => P("b")).!
     testSuccess(parser)("ab!", "ab")
