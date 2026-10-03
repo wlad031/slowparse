@@ -10,3 +10,4 @@
 - [x] FIX: HIGH: README JSON example uses illegal forward references and does not enforce end-of-input, contradicting its valid-JSON claim (`README.md:47`) — fixed in f068342
 - [x] FIX: MEDIUM: README installation version is inconsistent with the changelog and current build version (`README.md:10`) — fixed in f068342
 - [x] FIX: HIGH: JSON test parser declarations eagerly reference later recursive values, leaving null parser branches (`src/test/scala/dev/vgerasimov/slowparse/JsonParserTest.scala:26`) — fixed in f04da95
+- [x] NOTE: Follow-up review confirmed `P.apply` defers its parser argument, so the original declarations did not capture null branches; `f04da95` still removes the forward-reference declaration and makes recursive initialization explicit.
