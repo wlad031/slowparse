@@ -287,7 +287,12 @@ class ParserTest extends ParserTestSuite:
 
   test("*flatMap* preserves its full capture span") {
     val parser = P("a").flatMap(_ => P("b")).!
-    testSuccess(parser)("ab!", "ab")
+    parser("ab!") match
+      case Success(value, parsed, remaining, _) =>
+        assertEquals(value, "ab")
+        assertEquals(parsed, "ab")
+        assertEquals(remaining, "!")
+      case Failure(message, _) => fail(s"not parsed: $message")
   }
 
   test("*andLazyThen* is working properly") {
