@@ -272,6 +272,17 @@ class ParserTest extends ParserTestSuite:
     testFailure(cutParser)("val 1234")
   }
 
+  test("*cut* commits only after its left parser succeeds") {
+    val fallback = P("a") ~/ P("b") | P("ac")
+    testFailure(fallback)("ac")
+    testSuccess(P(P("x") ~/ P("b") | P("ac")).!) ("ac", "ac")
+  }
+
+  test("*flatMap* preserves its full capture span") {
+    val parser = P("a").flatMap(_ => P("b")).!
+    testSuccess(parser)("ab!", "ab")
+  }
+
   test("*andLazyThen* is working properly") {
     val parser1: AndLazyThen[Int, (Int, String)] = andLazyThen(d.!.map(_.toInt), P("A").!)
 

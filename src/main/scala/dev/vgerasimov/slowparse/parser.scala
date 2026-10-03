@@ -30,7 +30,8 @@ private[slowparse] final case class InternalSuccess[+A](
 ) extends InternalOut[A]
 private[slowparse] final case class InternalFailure(
   message: String,
-  label: Option[String] = None
+  label: Option[String] = None,
+  committed: Boolean = false
 ) extends InternalOut[Nothing]
 
 private[slowparse] trait InternalParser[+A]:
@@ -137,7 +138,7 @@ object Parsers:
       parser.run(Source(input), 0) match
         case InternalSuccess(value, start, end, label) =>
           Success(value, input.substring(start, end), input.substring(end), label)
-        case InternalFailure(message, label) => Failure(message, label)
+        case InternalFailure(message, label, _) => Failure(message, label)
 
   private def internal[A](f: (Source, Int) => InternalOut[A]): InternalParser[A] =
     new InternalParser[A]:
@@ -289,7 +290,7 @@ object Parsers:
   def label[A](parser: P[A])(string: String): P[A] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(value, start, end, _) => InternalSuccess(value, start, end, Some(string))
-      case InternalFailure(message, _)           => InternalFailure(message, Some(string))
+      case InternalFailure(message, _, _)        => InternalFailure(message, Some(string))
   })
 
   /** Applies given function to successful result of calling given parser. */
@@ -302,8 +303,11 @@ object Parsers:
   /** Applies given function returning another parser to successful result of calling given parser. */
   def flatMap[A, B](parser: P[A])(f: A => P[B]): P[B] = public(internal { (source, offset) =>
     parser.run(source, offset) match
-      case InternalSuccess(value, _, end, _) => f(value).run(source, end)
-      case failure: InternalFailure          => failure
+      case InternalSuccess(value, start, end, _) =>
+        f(value).run(source, end) match
+          case InternalSuccess(nextValue, _, nextEnd, label) => InternalSuccess(nextValue, start, nextEnd, label)
+          case failure: InternalFailure                      => failure
+      case failure: InternalFailure => failure
   })
 
   /** Wraps result of calling given parser into [[Option]], thus, never fails. */
@@ -331,8 +335,8 @@ object Parsers:
         case InternalSuccess(value1, start, end, _) =>
           parser2.run(source, end) match
             case InternalSuccess(value2, _, next, _) => InternalSuccess(sequencer(value1, value2), start, next)
-            case InternalFailure(message, label)     => InternalFailure(message, label)
-        case InternalFailure(message, label) => InternalFailure(message, label)
+            case InternalFailure(message, label, _)  => InternalFailure(message, label)
+        case InternalFailure(message, label, _) => InternalFailure(message, label)
     })
 
   /** Concatenates two given parsers in a flatMap manner. */
@@ -342,8 +346,8 @@ object Parsers:
         case InternalSuccess(value1, start, end, _) =>
           parser2(value1).run(source, end) match
             case InternalSuccess(value2, _, next, _) => InternalSuccess(sequencer(value1, value2), start, next)
-            case InternalFailure(message, label)     => InternalFailure(message, label)
-        case InternalFailure(message, label) => InternalFailure(message, label)
+            case InternalFailure(message, label, _)  => InternalFailure(message, label)
+        case InternalFailure(message, label, _) => InternalFailure(message, label)
     })
 
   /** Concatenates given sequence of parsers. */
@@ -404,14 +408,12 @@ object Parsers:
 
   def orElse[A, B](parser1: P[A], parser2: P[B]): P[A | B] = public(internal { (source, offset) =>
     parser1.run(source, offset) match
-      case success: InternalSuccess[A] => success
-      case failure: InternalFailure =>
-        parser1 match
-          case _: CutP[?] => failure
-          case _ =>
-            parser2.run(source, offset) match
-              case success: InternalSuccess[B] => success
-              case failure: InternalFailure    => InternalFailure(failure.message)
+      case success: InternalSuccess[A]                   => success
+      case failure: InternalFailure if failure.committed => failure
+      case _: InternalFailure =>
+        parser2.run(source, offset) match
+          case success: InternalSuccess[B] => success
+          case failure: InternalFailure    => InternalFailure(failure.message, failure.label, failure.committed)
   })
 
   def fromRange(range: scala.collection.immutable.NumericRange.Inclusive[Char]): P[Unit] = choice(range.map(char)*)
@@ -423,12 +425,15 @@ object Parsers:
   private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
 
   def cut[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] =
-    new CutP[C]:
-      private val combined = Parsers.andThen(parser1, parser2)
-      override def run(source: Source, offset: Int): InternalOut[C] = combined.run(source, offset)
-      override def apply(input: String): POut[C] = combined(input)
-
-  private trait CutP[+A] extends P[A]
+    public(internal { (source, offset) =>
+      parser1.run(source, offset) match
+        case InternalSuccess(value1, start, end, _) =>
+          parser2.run(source, end) match
+            case InternalSuccess(value2, _, next, label) =>
+              InternalSuccess(sequencer(value1, value2), start, next, label)
+            case failure: InternalFailure => failure.copy(committed = true)
+        case failure: InternalFailure => failure
+    })
 
   def andLazyThen[A, B, C](parser1: P[A], parser2: => P[B])(using
     sequencer: Sequencer[A, B, C]
@@ -448,7 +453,7 @@ object Parsers:
                       source.value.substring(parsedEnd),
                       nextLabel
                     )
-                  case InternalFailure(message, nextLabel) => Failure(message, nextLabel)
+                  case InternalFailure(message, nextLabel, _) => Failure(message, nextLabel)
             ),
             start,
             end,
@@ -459,7 +464,7 @@ object Parsers:
       run(Source(input), 0) match
         case InternalSuccess(value, start, end, label) =>
           Success(value, input.substring(start, end), input.substring(end), label)
-        case InternalFailure(message, label) => Failure(message, label)
+        case InternalFailure(message, label, _) => Failure(message, label)
 
   def mapAndLazyThen[A, B1, B2](
     andLazyThen: AndLazyThen[A, B1]
@@ -473,7 +478,7 @@ object Parsers:
       run(Source(input), 0) match
         case InternalSuccess(value, start, end, label) =>
           Success(value, input.substring(start, end), input.substring(end), label)
-        case InternalFailure(message, label) => Failure(message, label)
+        case InternalFailure(message, label, _) => Failure(message, label)
 
   def evalAndLazyThen[A, B](andLazyThen: AndLazyThen[A, B]): P[B] = public(internal { (source, offset) =>
     andLazyThen.run(source, offset) match
