@@ -7,10 +7,11 @@ val giteaCredentials = for {
 
 import Tasks.generateSequencers
 
+ThisBuild / scalaVersion := "3.8.3"
+
 val root = project
   .in(file("."))
   .settings(
-    scalaVersion := "3.8.3",
     organization := "dev.vgerasimov",
     name := "slowparse",
     version := artifactVersion,
@@ -37,4 +38,13 @@ val root = project
       IO.write(file, generateSequencers(22))
       Seq(file)
     }.taskValue
+  )
+
+lazy val benchmark = project
+  .in(file("benchmark"))
+  .dependsOn(root)
+  .enablePlugins(JmhPlugin)
+  .settings(
+    name := "slowparse-benchmark",
+    publish / skip := true
   )

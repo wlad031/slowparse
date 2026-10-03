@@ -56,3 +56,34 @@ val pObj: P[JObject] =
 // final parser
 val json: P[Json] = P(pObj | pArr)
 ```
+
+## Performance benchmarks
+
+Manual JMH benchmarks exercise slowparse public combinator API against deterministic valid JSON fixtures:
+
+| Scenario | Fixture | Approximate size |
+| --- | --- | ---: |
+| `parseSmall` | `benchmark/src/main/resources/fixtures/small.json` | 482 B |
+| `parseMedium` | `benchmark/src/main/resources/fixtures/medium.json` | 9 KiB |
+| `parseLarge` | `benchmark/src/main/resources/fixtures/large.json` | 148 KiB |
+
+Compile benchmark code:
+
+```bash
+sbt --batch "benchmark/Jmh/compile"
+```
+
+Run short, repeatable measurements for each metric:
+
+```bash
+# Throughput operations per second
+sbt --batch "benchmark/Jmh/run -bm thrpt -i 3 -wi 3 -f 1 -t 1 .*JsonParserBenchmark.*"
+
+# Average per-operation time (latency)
+sbt --batch "benchmark/Jmh/run -bm avgt -i 3 -wi 3 -f 1 -t 1 .*JsonParserBenchmark.*"
+
+# Allocation rate and allocation per operation
+sbt --batch "benchmark/Jmh/run -bm thrpt -prof gc -i 3 -wi 3 -f 1 -t 1 .*JsonParserBenchmark.*"
+```
+
+Results are advisory comparisons only: benchmarks do not run in CI and no performance threshold is enforced.
