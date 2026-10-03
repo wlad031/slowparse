@@ -427,35 +427,39 @@ object Parsers:
 
   def andLazyThen[A, B, C](parser1: P[A], parser2: => P[B])(using
     sequencer: Sequencer[A, B, C]
-  ): AndLazyThen[A, C] = input => {
-    parser1(input) match
-      case Success(value1, parsed1, remaining, _) =>
-        Success(
-          (value1, () => parser2(remaining).map(sequencer(value1, _))),
-          parsed1,
-          remaining
-        )
-      case Failure(message, _) => Failure(message)
-  }
+  ): AndLazyThen[A, C] = new AndLazyThen[A, C]:
+    override def run(source: Source, offset: Int): InternalOut[(A, () => POut[C])] =
+      parser1.run(source, offset) match
+        case InternalSuccess(value1, start, end, label) =>
+          InternalSuccess((value1, () => parser2.run(source, end) match
+            case InternalSuccess(value2, parsedStart, parsedEnd, nextLabel) =>
+              Success(sequencer(value1, value2), source.value.substring(parsedStart, parsedEnd), source.value.substring(parsedEnd), nextLabel)
+            case InternalFailure(message, nextLabel) => Failure(message, nextLabel)), start, end, label)
+        case failure: InternalFailure => failure
+    override def apply(input: String): POut[(A, () => POut[C])] =
+      run(Source(input), 0) match
+        case InternalSuccess(value, start, end, label) => Success(value, input.substring(start, end), input.substring(end), label)
+        case InternalFailure(message, label) => Failure(message, label)
 
   def mapAndLazyThen[A, B1, B2](
     andLazyThen: AndLazyThen[A, B1]
-  )(f: B1 => B2): AndLazyThen[A, B2] =
-    input => {
-      andLazyThen(input) match
-        case Success((v, next), parsed, remaining, _) =>
-          Success((v, () => next().map(f)), parsed, remaining)
-        case f: Failure => f
-    }
+  )(f: B1 => B2): AndLazyThen[A, B2] = new AndLazyThen[A, B2]:
+    override def run(source: Source, offset: Int): InternalOut[(A, () => POut[B2])] =
+      andLazyThen.run(source, offset) match
+        case InternalSuccess((value, next), start, end, label) => InternalSuccess((value, () => next().map(f)), start, end, label)
+        case failure: InternalFailure => failure
+    override def apply(input: String): POut[(A, () => POut[B2])] =
+      run(Source(input), 0) match
+        case InternalSuccess(value, start, end, label) => Success(value, input.substring(start, end), input.substring(end), label)
+        case InternalFailure(message, label) => Failure(message, label)
 
-  def evalAndLazyThen[A, B](andLazyThen: AndLazyThen[A, B]): P[B] = input => {
-    andLazyThen(input) match
-      case Success((v, next), parsed1, _, _) =>
-        next() match
-          case Success(value, parsed2, remaining, _) => Success(value, parsed1 + parsed2, remaining)
-          case f: Failure                            => f
-      case f: Failure => f
-  }
+  def evalAndLazyThen[A, B](andLazyThen: AndLazyThen[A, B]): P[B] = public(internal { (source, offset) =>
+    andLazyThen.run(source, offset) match
+      case InternalSuccess((_, next), start, _, _) => next() match
+        case Success(value, _, remaining, label) => InternalSuccess(value, start, source.value.length - remaining.length, label)
+        case Failure(message, label) => InternalFailure(message, label)
+      case failure: InternalFailure => failure
+  })
 
 end Parsers
 
