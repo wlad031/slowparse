@@ -9,3 +9,4 @@
 - [x] FIX: HIGH: Parser success tests ignore unconsumed input, masking prefix-acceptance bugs in complete-language parsers (`src/test/scala/dev/vgerasimov/slowparse/ParserTestSuite.scala:7`) — fixed in f068342
 - [x] FIX: HIGH: README JSON example uses illegal forward references and does not enforce end-of-input, contradicting its valid-JSON claim (`README.md:47`) — fixed in f068342
 - [x] FIX: MEDIUM: README installation version is inconsistent with the changelog and current build version (`README.md:10`) — fixed in f068342
+- [x] FIX: HIGH: JSON test parser declarations eagerly reference later recursive values, leaving null parser branches (`src/test/scala/dev/vgerasimov/slowparse/JsonParserTest.scala:26`) — fixed in f04da95
