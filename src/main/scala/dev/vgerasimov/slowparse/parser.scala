@@ -269,16 +269,20 @@ object Parsers:
   ): P[String] = surrounded(surroundingParser, (!surroundingParser ~ anyChar.!).*).mkString
 
   /** Parses given character. */
-  def char(char: Char): P[Unit] = public(internal { (source, offset) =>
-    if offset < source.value.length && source.value.charAt(offset) == char then InternalSuccess((), offset, offset + 1)
-    else InternalFailure(s"expected: $char")
-  })
+  def char(char: Char): P[Unit] =
+    val failure = InternalFailure(s"expected: $char")
+    public(internal { (source, offset) =>
+      if offset < source.value.length && source.value.charAt(offset) == char then InternalSuccess((), offset, offset + 1)
+      else failure
+    })
 
   /** Parses given string */
-  def string(str: String): P[Unit] = public(internal { (source, offset) =>
-    if source.value.startsWith(str, offset) then InternalSuccess((), offset, offset + str.length)
-    else InternalFailure(s"expected: $str")
-  })
+  def string(str: String): P[Unit] =
+    val failure = InternalFailure(s"expected: $str")
+    public(internal { (source, offset) =>
+      if source.value.startsWith(str, offset) then InternalSuccess((), offset, offset + str.length)
+      else failure
+    })
 
   /** Attaches given label to the parser. */
   def label[A](parser: P[A])(string: String): P[A] = public(internal { (source, offset) =>
