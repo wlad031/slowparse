@@ -28,9 +28,9 @@ jobs:
         env:
           GITEA_USERNAME: ${{ secrets.PACKAGE_USERNAME }}
           GITEA_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
-          JVM_OPTS: -Xms128m -Xmx768m -Xss2m -XX:MaxMetaspaceSize=256m
-          SBT_OPTS: -Dsbt.supershell=false
+          JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -Xss2m -XX:MaxMetaspaceSize=192m
+          SBT_OPTS: -Dsbt.supershell=false -Dsbt.task.cpus=1
         run: |
           VERSION="${{ gitea.ref_name }}"
           VERSION="${VERSION#v}"
-          VERSION="$VERSION" sbt publish
+          VERSION="$VERSION" sbt -J-Xms128m -J-Xmx384m -J-Xss2m -J-XX:MaxMetaspaceSize=192m publish
