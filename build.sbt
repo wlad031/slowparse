@@ -1,5 +1,5 @@
 val giteaMaven = "https://gitea.local.vgerasimov.dev/api/packages/wlad031/maven"
-val artifactVersion = sys.env.getOrElse("VERSION", "0.2.3-SNAPSHOT")
+val artifactVersion = sys.env.getOrElse("VERSION", "0.2.4-SNAPSHOT")
 val giteaCredentials = for {
   username <- sys.env.get("GITEA_USERNAME")
   token <- sys.env.get("GITEA_TOKEN")
