@@ -42,4 +42,6 @@ jobs:
           GITEA_USERNAME: ${{ secrets.PACKAGE_USERNAME }}
           GITEA_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
           VERSION: ${{ github.ref_name }}
+          JVM_OPTS: -Xms128m -Xmx768m -Xss2m -XX:MaxMetaspaceSize=256m
+          SBT_OPTS: -Dsbt.supershell=false
         run: VERSION="${VERSION#v}" sbt publish
