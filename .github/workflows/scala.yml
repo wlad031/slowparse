@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 17
@@ -17,6 +18,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: sbt
       - name: Run sbt build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,6 +28,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 17
@@ -33,6 +36,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: sbt
       - name: Publish release artifact
         env:
           GITEA_USERNAME: ${{ secrets.PACKAGE_USERNAME }}
