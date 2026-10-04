@@ -9,9 +9,7 @@ on:
 
 jobs:
   build:
-    if: false # CI build/publish is disabled; releases are verified and published locally.
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 17
@@ -19,17 +17,15 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: sbt
       - name: Run sbt build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: sbt clean update scalafmtCheck compile test
 
   publish:
-    if: false # CI build/publish is disabled; releases are verified and published locally.
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 17
@@ -37,12 +33,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: sbt
       - name: Publish release artifact
         env:
           GITEA_USERNAME: ${{ secrets.PACKAGE_USERNAME }}
           GITEA_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
           VERSION: ${{ github.ref_name }}
-          JVM_OPTS: -Xms128m -Xmx768m -Xss2m -XX:MaxMetaspaceSize=256m
-          SBT_OPTS: -Dsbt.supershell=false
         run: VERSION="${VERSION#v}" sbt publish
