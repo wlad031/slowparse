@@ -6,9 +6,9 @@ import scala.language.postfixOps
 /** Function acception an input to be parsed and returning [[POut]]. */
 trait P[+A] extends (String => POut[A]):
   private[slowparse] def run(source: Source, offset: Int): InternalOut[A] =
-    apply(source.value.substring(offset)) match
+    apply(source.materialize(offset)) match
       case POut.Success(value, parsed, remaining, label) =>
-        InternalSuccess(value, offset, source.value.length - remaining.length, label)
+        InternalSuccess(value, offset, source.size - Source.fromInput(remaining).size, label)
       case POut.Failure(message, label) => InternalFailure(message, label)
 
 /** A [[P]]arser that returns a pair of one value and a function that can be evaluated in order to "continue" parsing.
@@ -19,7 +19,20 @@ trait AndLazyThen[A, +B] extends P[(A, () => POut[B])]
 sealed trait POut[+A]
 
 /** Contains implementations of [[POut]]. */
-private[slowparse] final case class Source(value: String)
+private[slowparse] final case class Source private (chars: Vector[Char]):
+  def size: Int = chars.size
+  def at(offset: Int): Char = chars(offset)
+  def containsAll(token: Source, offset: Int): Boolean =
+    offset + token.size <= size && token.chars.indices.forall(i => chars(offset + i) == token.chars(i))
+  def charSet: Set[Char] = chars.toSet
+
+  /** Public-result/semantic-text boundary. Parser internals retain spans over `chars`. */
+  def materialize(from: Int = 0, until: Int = Int.MaxValue): String =
+    chars.slice(from, until).mkString
+
+private[slowparse] object Source:
+  /** Public String-input boundary. */
+  def fromInput(input: String): Source = Source(input.iterator.toVector)
 
 private[slowparse] sealed trait InternalOut[+A]
 private[slowparse] final case class InternalSuccess[+A](
@@ -60,17 +73,24 @@ object POut:
       ctx: (String, String),
       parserLabel: Option[String] = None
     ): Failure =
+      val before = Source.fromInput(ctx._1)
+      val after = Source.fromInput(ctx._2)
+      val prefix = if before.size == 0 then "   " else "..."
+      val suffix = if after.size == 0 then "   " else "..."
+      val caretPadding = Vector.fill(before.size)(' ').mkString
       Failure(
         s"""|Expected: $expected
           |Got:      $got
-          |   ${if ctx._1.isEmpty then "   " else "..."}${ctx._1}${ctx._2}${if ctx._2.isEmpty then "   " else "..."}
-          |      ${" ".repeat(ctx._1.length)}^
+          |   $prefix${before.materialize()}${after.materialize()}$suffix
+          |      $caretPadding^
       """.stripMargin,
         parserLabel
       )
 
   def ctx(before: String = "", after: String = ""): (String, String) =
-    (before.safeSlice(from = before.length - 5), after.safeSlice(until = 5))
+    val beforeSource = Source.fromInput(before)
+    val afterSource = Source.fromInput(after)
+    (beforeSource.materialize(beforeSource.size - 5), afterSource.materialize(0, 5))
 
 /** Contains simple constructors for [[P]]. */
 object P:
@@ -135,9 +155,10 @@ object Parsers:
   private def public[A](parser: InternalParser[A]): P[A] = new P[A]:
     override def run(source: Source, offset: Int): InternalOut[A] = parser.run(source, offset)
     override def apply(input: String): POut[A] =
-      parser.run(Source(input), 0) match
+      val source = Source.fromInput(input)
+      parser.run(source, 0) match
         case InternalSuccess(value, start, end, label) =>
-          Success(value, input.substring(start, end), input.substring(end), label)
+          Success(value, source.materialize(start, end), source.materialize(end), label)
         case InternalFailure(message, label, _) => Failure(message, label)
 
   private def internal[A](f: (Source, Int) => InternalOut[A]): InternalParser[A] =
@@ -145,9 +166,9 @@ object Parsers:
       override def run(source: Source, offset: Int): InternalOut[A] = f(source, offset)
 
   private def asInternal[A](parser: P[A]): InternalParser[A] = internal { (source, offset) =>
-    parser(source.value.substring(offset)) match
+    parser(source.materialize(offset)) match
       case Success(value, parsed, remaining, label) =>
-        InternalSuccess(value, offset, source.value.length - remaining.length, label)
+        InternalSuccess(value, offset, source.size - Source.fromInput(remaining).size, label)
       case Failure(message, label) => InternalFailure(message, label)
   }
 
@@ -207,7 +228,7 @@ object Parsers:
 
   /** Parser returning success only if input is empty. */
   val end: P[Unit] = public(internal { (source, offset) =>
-    if offset == source.value.length then InternalSuccess((), offset, offset)
+    if offset == source.size then InternalSuccess((), offset, offset)
     else InternalFailure("expected: <end of line>")
   })
 
@@ -216,13 +237,13 @@ object Parsers:
     condition: Char => Boolean
   ): P[String] = public(internal { (source, offset) =>
     var end = offset
-    while end < source.value.length && condition(source.value.charAt(end)) do end += 1
-    InternalSuccess(source.value.substring(offset, end), offset, end)
+    while end < source.size && condition(source.at(end)) do end += 1
+    InternalSuccess(source.materialize(offset, end), offset, end)
   })
 
   /** Parses all characters until some of them is presented in given string. */
   def charsUntilIn(string: String): P[String] =
-    val chars = string.toSet
+    val chars = Source.fromInput(string).charSet
     charsWhile(c => !chars.contains(c))
 
   /** Parses all characters until end of line. */
@@ -237,8 +258,14 @@ object Parsers:
 
   /** Parses returning failure only if input is empty. */
   val anyChar: P[Unit] = public(internal { (source, offset) =>
-    if offset >= source.value.length then InternalFailure("expected: <any char>, got: <end of input>")
+    if offset >= source.size then InternalFailure("expected: <any char>, got: <end of input>")
     else InternalSuccess((), offset, offset + 1)
+  })
+
+  /** Parses and returns one character without materializing an intermediate String. */
+  val anyCharValue: P[Char] = public(internal { (source, offset) =>
+    if offset >= source.size then InternalFailure("expected: <any char>, got: <end of input>")
+    else InternalSuccess(source.at(offset), offset, offset + 1)
   })
 
   /** Parses end of line or end of input. */
@@ -273,16 +300,16 @@ object Parsers:
   def char(char: Char): P[Unit] =
     val failure = InternalFailure(s"expected: $char")
     public(internal { (source, offset) =>
-      if offset < source.value.length && source.value.charAt(offset) == char then
-        InternalSuccess((), offset, offset + 1)
+      if offset < source.size && source.at(offset) == char then InternalSuccess((), offset, offset + 1)
       else failure
     })
 
   /** Parses given string */
   def string(str: String): P[Unit] =
+    val token = Source.fromInput(str)
     val failure = InternalFailure(s"expected: $str")
     public(internal { (source, offset) =>
-      if source.value.startsWith(str, offset) then InternalSuccess((), offset, offset + str.length)
+      if source.containsAll(token, offset) then InternalSuccess((), offset, offset + token.size)
       else failure
     })
 
@@ -374,7 +401,7 @@ object Parsers:
     public(internal { (source, initialOffset) =>
       @tailrec def iter(i: Int, current: P[A], values: List[A], offset: Int): InternalOut[List[A]] =
         if i == max || (i == min && !greedy) then InternalSuccess(values.reverse, initialOffset, offset)
-        else if offset == source.value.length then
+        else if offset == source.size then
           if i < min then InternalFailure(s"expected minimum $min repetions, but parsed only $i")
           else InternalSuccess(values.reverse, initialOffset, offset)
         else
@@ -394,7 +421,7 @@ object Parsers:
   def capture(parser: P[?]): P[String] = public(internal { (source, offset) =>
     parser.run(source, offset) match
       case InternalSuccess(_, start, end, label) =>
-        InternalSuccess(source.value.substring(start, end), start, end, label)
+        InternalSuccess(source.materialize(start, end), start, end, label)
       case failure: InternalFailure => failure
   })
 
@@ -422,7 +449,8 @@ object Parsers:
     case Success(ranges, _, _, _) =>
       choice(ranges.map { case (fromChar, toChar) => fromRange(fromChar to toChar) }*)
     case _: Failure => ignoredInput => Failure(s"cannot parse given range: $range")
-  private val charRange: P[(Char, Char)] = anyChar.!.map(_.head) ~ P("-") ~ anyChar.!.map(_.head)
+  private val charRange: P[(Char, Char)] =
+    anyCharValue ~ P("-") ~ anyCharValue
 
   def cut[A, B, C](parser1: P[A], parser2: P[B])(using sequencer: Sequencer[A, B, C]): P[C] =
     public(internal { (source, offset) =>
@@ -449,8 +477,8 @@ object Parsers:
                   case InternalSuccess(value2, parsedStart, parsedEnd, nextLabel) =>
                     Success(
                       sequencer(value1, value2),
-                      source.value.substring(parsedStart, parsedEnd),
-                      source.value.substring(parsedEnd),
+                      source.materialize(parsedStart, parsedEnd),
+                      source.materialize(parsedEnd),
                       nextLabel
                     )
                   case InternalFailure(message, nextLabel, _) => Failure(message, nextLabel)
@@ -461,9 +489,10 @@ object Parsers:
           )
         case failure: InternalFailure => failure
     override def apply(input: String): POut[(A, () => POut[C])] =
-      run(Source(input), 0) match
+      val source = Source.fromInput(input)
+      run(source, 0) match
         case InternalSuccess(value, start, end, label) =>
-          Success(value, input.substring(start, end), input.substring(end), label)
+          Success(value, source.materialize(start, end), source.materialize(end), label)
         case InternalFailure(message, label, _) => Failure(message, label)
 
   def mapAndLazyThen[A, B1, B2](
@@ -475,9 +504,10 @@ object Parsers:
           InternalSuccess((value, () => next().map(f)), start, end, label)
         case failure: InternalFailure => failure
     override def apply(input: String): POut[(A, () => POut[B2])] =
-      run(Source(input), 0) match
+      val source = Source.fromInput(input)
+      run(source, 0) match
         case InternalSuccess(value, start, end, label) =>
-          Success(value, input.substring(start, end), input.substring(end), label)
+          Success(value, source.materialize(start, end), source.materialize(end), label)
         case InternalFailure(message, label, _) => Failure(message, label)
 
   def evalAndLazyThen[A, B](andLazyThen: AndLazyThen[A, B]): P[B] = public(internal { (source, offset) =>
@@ -485,7 +515,7 @@ object Parsers:
       case InternalSuccess((_, next), start, _, _) =>
         next() match
           case Success(value, _, remaining, label) =>
-            InternalSuccess(value, start, source.value.length - remaining.length, label)
+            InternalSuccess(value, start, source.size - Source.fromInput(remaining).size, label)
           case Failure(message, label) => InternalFailure(message, label)
       case failure: InternalFailure => failure
   })
@@ -493,12 +523,6 @@ object Parsers:
 end Parsers
 
 extension (self: P[List[?]]) def mkString: P[String] = self.map(_.mkString)
-
-extension (self: String)
-  private[slowparse] def safeHead: String = safeSlice(0, 1)
-  private[slowparse] def safeSlice(from: Int = 0, until: Int = Int.MaxValue): String = self match
-    case x: String if from > until => ""
-    case x: String                 => x.substring(Math.max(0, from), Math.min(x.length, until))
 
 extension [A](self: POut[A])
 
