@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    if: false # CI build/publish is disabled; releases are verified and published locally.
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -25,7 +26,7 @@ jobs:
         run: sbt clean update scalafmtCheck compile test
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: false # CI build/publish is disabled; releases are verified and published locally.
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 60
