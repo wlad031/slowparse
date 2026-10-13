@@ -33,6 +33,14 @@ class JsonParserBenchmark:
   @Benchmark
   def parseLarge(): POut[Unit] = JsonFixtures.parser(large)
 
+  /** Internal measurement: excludes mandated public parsed/remaining String materialization. */
+  @Benchmark
+  def parseMediumInternal(): PResult[Unit] = JsonFixtures.parser.run(Span.fromInput(medium), 0)
+
+  /** Internal measurement: excludes mandated public parsed/remaining String materialization. */
+  @Benchmark
+  def parseLargeInternal(): PResult[Unit] = JsonFixtures.parser.run(Span.fromInput(large), 0)
+
 private object JsonFixtures:
   private val jsonNull: P[Unit] = P("null")
   private val jsonBoolean: P[Unit] = P("true") | P("false")

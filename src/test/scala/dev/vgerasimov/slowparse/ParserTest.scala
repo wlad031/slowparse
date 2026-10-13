@@ -50,7 +50,7 @@ class ParserTest extends ParserTestSuite:
             assertEquals(parsed, toParse)
           case x: Success[Unit] => fail(s"parsed not correctly: $toParse")
           case Failure(message, _) =>
-            assertEquals(message, s"unexpected: $c")
+            assertEquals(message, s"Expected: unexpected: $c\nOffset: 0")
       }
     }
   }
